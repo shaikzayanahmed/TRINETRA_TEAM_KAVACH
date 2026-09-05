@@ -3,7 +3,6 @@ import { Outlet } from 'react-router-dom';
 import { Header } from '../components/common/Header';
 import { Sidebar } from '../components/common/Sidebar';
 import { DemoBanner } from '../components/common/DemoBanner';
-import { VoiceControlWidget } from '../components/voice/VoiceControlWidget';
 
 export const MainLayout: React.FC = () => {
   return (
@@ -26,9 +25,6 @@ export const MainLayout: React.FC = () => {
           </main>
         </div>
       </div>
-
-      {/* Global AI Voice Control HUD Widget */}
-      <VoiceControlWidget />
 
       {/* Tactical Footer */}
       <footer className="w-full bg-surface-container-lowest border-t border-surface-container-high/60 py-2.5 px-4 lg:px-6 select-none font-mono text-[11px] text-on-surface-variant flex flex-col sm:flex-row items-center justify-between gap-2 shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">
