@@ -42,6 +42,24 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
     setSelectedIndex(0);
   }, [query, activeCategory]);
 
+  // Global Escape key listener to guarantee modal exits regardless of element focus
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, [isOpen, onClose]);
+
   // Focus input when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -114,6 +132,8 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
         executeCommand(filteredCommands[selectedIndex]);
       }
     } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
       onClose();
     }
   };
@@ -143,8 +163,14 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center pt-16 sm:pt-24 px-4 font-body select-none animate-fade-in">
-      <div className="w-full max-w-2xl bg-surface-container-low border border-surface-container-high/80 rounded-2xl shadow-tactical-extruded flex flex-col overflow-hidden">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center pt-16 sm:pt-24 px-4 font-body select-none animate-fade-in cursor-pointer"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl bg-surface-container-low border border-surface-container-high/80 rounded-2xl shadow-tactical-extruded flex flex-col overflow-hidden cursor-default"
+      >
         {/* Terminal Command Header / Prompt Bar */}
         <div className="p-4 border-b border-surface-container-high/60 bg-surface-container-lowest/80 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-surface-container-high border border-primary/30 flex items-center justify-center text-primary shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)]">
@@ -166,9 +192,18 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
             />
           </div>
 
-          <div className="flex items-center gap-1.5 font-mono text-[10px] text-outline">
-            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high border border-surface-container-highest">ESC</kbd>
-            <span>TO CLOSE</span>
+          <div className="flex items-center gap-2 font-mono text-[10px] text-outline">
+            <div className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high border border-surface-container-highest">ESC</kbd>
+              <span>EXIT</span>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-md bg-surface-container-high hover:bg-surface-container-highest text-outline hover:text-on-surface transition-colors flex items-center justify-center"
+              title="Close (ESC)"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
           </div>
         </div>
 
