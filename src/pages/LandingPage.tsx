@@ -143,7 +143,7 @@ export const LandingPage: React.FC = () => {
 
       {/* Footer */}
       <footer className="mt-auto py-6 px-6 bg-surface-container-lowest border-t border-surface-container-high/60 text-center font-mono text-xs text-outline">
-        <span>TRINETRA EDGE-AI SURVEILLANCE · SIH 2024 · RESTRICTED USE</span>
+        <span>TRINETRA EDGE-AI SURVEILLANCE · SIH 2026 · RESTRICTED USE</span>
       </footer>
     </div>
   );
