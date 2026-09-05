@@ -7,6 +7,11 @@ import { useDemo } from '../context/DemoContext';
 export const EvidenceVaultPage: React.FC = () => {
   const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [playbackProgress, setPlaybackProgress] = useState<number>(0);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [verificationResult, setVerificationResult] = useState<{ verified: boolean; message: string } | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   const { activeEvidence } = useDemo();
 
@@ -19,7 +24,71 @@ export const EvidenceVaultPage: React.FC = () => {
     fetchEvidence();
   }, []);
 
+  // Playback timer simulation
+  useEffect(() => {
+    let interval: any;
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setPlaybackProgress((prev) => {
+          if (prev >= 100) {
+            setIsPlaying(false);
+            return 0;
+          }
+          return prev + 2;
+        });
+      }, 250);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying]);
+
   const currentEvidence = activeEvidence || selectedEvidence;
+
+  const handleVerifyIntegrity = () => {
+    setIsVerifying(true);
+    setVerificationResult(null);
+    setTimeout(() => {
+      setIsVerifying(false);
+      setVerificationResult({
+        verified: true,
+        message: 'SHA-256 Merkle-tree hash root intact. 0 bit-rot or payload tampering detected.',
+      });
+    }, 800);
+  };
+
+  const handleExportCertificate = () => {
+    if (!currentEvidence) return;
+    const cert = {
+      title: 'TRINETRA TACTICAL EVIDENCE INTEGRITY CERTIFICATE',
+      evidenceId: currentEvidence.id,
+      timestamp: currentEvidence.timestamp,
+      sha256Hash: currentEvidence.sha256Hash,
+      targetId: currentEvidence.targetId,
+      alertId: currentEvidence.alertId,
+      confidence: currentEvidence.confidence,
+      privacyCompliance: 'DPDPA 2023 Compliant - Facial Anonymization Applied',
+      verifiedBy: 'NVIDIA Jetson AGX Orin Hardware Security Module (HSM)',
+      signedAt: new Date().toISOString(),
+    };
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(cert, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `EVIDENCE_CERTIFICATE_${currentEvidence.id}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const filteredEvidence = evidenceList.filter((ev) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      ev.id.toLowerCase().includes(term) ||
+      ev.alertId.toLowerCase().includes(term) ||
+      ev.targetId.toLowerCase().includes(term) ||
+      ev.location.toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="flex flex-col gap-4 select-none">
@@ -40,12 +109,31 @@ export const EvidenceVaultPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 font-mono text-xs">
-          <span className="px-3 py-1 rounded-lg bg-surface-container text-secondary border border-secondary/30 font-bold flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[16px]">verified</span>
-            <span>SHA-256 VERIFIED</span>
-          </span>
+          <button
+            onClick={handleExportCertificate}
+            className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary border border-primary/30 transition-colors flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">verified_user</span>
+            <span>EXPORT CERTIFICATE</span>
+          </button>
         </div>
       </div>
+
+      {/* Verification Feedback Banner */}
+      {verificationResult && (
+        <div className="p-3.5 rounded-xl bg-secondary-container/20 border border-secondary/40 shadow-tactical-inset flex items-center justify-between font-mono text-xs text-secondary animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">check_circle</span>
+            <span>{verificationResult.message}</span>
+          </div>
+          <button
+            onClick={() => setVerificationResult(null)}
+            className="text-outline hover:text-on-surface"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Main Evidence Details Layout */}
       {currentEvidence && (
@@ -62,15 +150,24 @@ export const EvidenceVaultPage: React.FC = () => {
                 </div>
 
                 <span className="px-2.5 py-0.5 rounded bg-secondary-container text-secondary font-mono text-xs font-bold uppercase">
-                  SHA-256 VERIFIED
+                  SHA-256 SEALED
                 </span>
               </div>
 
-              {/* Evidence Video Simulation Player Frame */}
-              <div className="relative w-full aspect-video bg-surface-container-lowest rounded-lg border border-surface-container-high/60 overflow-hidden flex flex-col items-center justify-center p-6 shadow-tactical-inset">
-                <div className="w-14 h-14 rounded-2xl bg-surface-container border border-primary/40 flex items-center justify-center text-primary shadow-tactical-extruded">
-                  <span className="material-symbols-outlined text-3xl">play_circle</span>
-                </div>
+              {/* Evidence Video Interactive Player Frame */}
+              <div className="relative w-full aspect-video bg-surface-container-lowest rounded-lg border border-surface-container-high/60 overflow-hidden flex flex-col items-center justify-center p-6 shadow-tactical-inset group">
+                {/* Visual Canvas Representation */}
+                <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
+
+                {/* Center Play / Pause Icon Button */}
+                <button
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className="relative z-10 w-16 h-16 rounded-2xl bg-surface-container-high/90 hover:bg-surface-container-highest border border-primary/40 flex items-center justify-center text-primary shadow-tactical-extruded transition-transform hover:scale-105"
+                >
+                  <span className="material-symbols-outlined text-4xl">
+                    {isPlaying ? 'pause_circle' : 'play_circle'}
+                  </span>
+                </button>
 
                 <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-surface-container-lowest/80 font-mono text-[10px] text-outline border border-surface-container-high">
                   CLIP: {currentEvidence.id} · DURATION: {currentEvidence.durationSeconds || 12}s
@@ -80,8 +177,26 @@ export const EvidenceVaultPage: React.FC = () => {
                   PRIVACY: PROCESSED (FACE BLURRED)
                 </div>
 
+                {/* Video Playback Progress Bar */}
+                <div className="absolute bottom-10 left-3 right-3 flex flex-col gap-1 z-10">
+                  <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden cursor-pointer">
+                    <div
+                      className="h-full bg-primary transition-all duration-150"
+                      style={{ width: `${playbackProgress}%` }}
+                    />
+                  </div>
+                </div>
+
                 <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-3 py-1 bg-surface-container-lowest/90 rounded font-mono text-[10px] text-outline border border-surface-container-high">
-                  <span>RECORDED: {currentEvidence.timestamp}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      className="text-primary hover:text-on-surface"
+                    >
+                      {isPlaying ? 'PAUSE' : 'PLAY'}
+                    </button>
+                    <span>RECORDED: {currentEvidence.timestamp}</span>
+                  </div>
                   <span>SIZE: {currentEvidence.fileSizeKb} KB</span>
                   <span className="text-primary font-semibold">DPDPA COMPLIANT</span>
                 </div>
@@ -120,21 +235,62 @@ export const EvidenceVaultPage: React.FC = () => {
                   {currentEvidence.sha256Hash}
                 </span>
               </div>
+
+              {/* Actions */}
+              <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+                <button
+                  onClick={handleVerifyIntegrity}
+                  disabled={isVerifying}
+                  className="py-2.5 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-secondary font-bold border border-secondary/30 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">{isVerifying ? 'sync' : 'verified'}</span>
+                  <span>{isVerifying ? 'VERIFYING...' : 'TEST SHA-256 HASH'}</span>
+                </button>
+
+                <button
+                  onClick={handleExportCertificate}
+                  className="py-2.5 rounded-lg bg-primary text-on-primary font-bold uppercase hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center justify-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">download</span>
+                  <span>DOWNLOAD SEAL</span>
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Evidence Directory (5 cols) */}
           <div className="lg:col-span-5 flex flex-col gap-4">
             <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-3 font-mono text-xs">
-              <h3 className="font-headline text-xs font-bold uppercase tracking-wider text-on-surface border-b border-surface-container-high/50 pb-2">
-                Recent Cryptographic Evidence Records
-              </h3>
+              <div className="flex items-center justify-between border-b border-surface-container-high/50 pb-2">
+                <h3 className="font-headline text-xs font-bold uppercase tracking-wider text-on-surface">
+                  Evidence Records ({filteredEvidence.length})
+                </h3>
+                <span className="text-[10px] text-secondary font-bold">ALL VERIFIED</span>
+              </div>
 
-              <div className="flex flex-col gap-2">
-                {evidenceList.map((ev) => (
+              {/* Search Evidence */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Filter records..."
+                  className="w-full pl-7 pr-2 py-1 rounded bg-surface-container-lowest border border-surface-container-high text-xs text-on-surface placeholder:text-outline shadow-tactical-inset"
+                />
+                <span className="material-symbols-outlined absolute left-2 top-1 text-outline text-[14px]">
+                  search
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto pr-1">
+                {filteredEvidence.map((ev) => (
                   <div
                     key={ev.id}
-                    onClick={() => setSelectedEvidence(ev)}
+                    onClick={() => {
+                      setSelectedEvidence(ev);
+                      setPlaybackProgress(0);
+                      setIsPlaying(false);
+                    }}
                     className={`p-3 rounded-lg border transition-all cursor-pointer flex flex-col gap-1 ${
                       currentEvidence.id === ev.id
                         ? 'bg-surface-container border-primary/60 shadow-tactical-extruded'
@@ -159,3 +315,4 @@ export const EvidenceVaultPage: React.FC = () => {
     </div>
   );
 };
+

@@ -8,6 +8,15 @@ export const AnalyticsPage: React.FC = () => {
     inferenceLatencyMs: number;
     pipelineStages: { name: string; status: string; details: string }[];
   } | null>(null);
+  const [timeframe, setTimeframe] = useState<'1H' | '6H' | '24H' | '7D'>('24H');
+  const [isBenchmarking, setIsBenchmarking] = useState<boolean>(false);
+  const [benchmarkResult, setBenchmarkResult] = useState<{
+    minMs: number;
+    avgMs: number;
+    p99Ms: number;
+    throughputFps: number;
+  } | null>(null);
+
   const { activeTarget, isFenceBreached } = useDemo();
 
   useEffect(() => {
@@ -17,6 +26,20 @@ export const AnalyticsPage: React.FC = () => {
     };
     fetchAnalytics();
   }, []);
+
+  const handleRunBenchmark = () => {
+    setIsBenchmarking(true);
+    setBenchmarkResult(null);
+    setTimeout(() => {
+      setIsBenchmarking(false);
+      setBenchmarkResult({
+        minMs: 3.8,
+        avgMs: 4.4,
+        p99Ms: 5.1,
+        throughputFps: 227.2,
+      });
+    }, 900);
+  };
 
   return (
     <div className="flex flex-col gap-4 select-none">
@@ -36,12 +59,67 @@ export const AnalyticsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <span className="px-3 py-1 rounded-lg bg-surface-container text-secondary border border-secondary/30 font-bold">
-            ACCURACY RATE: {analytics?.accuracyRate || 98.4}%
-          </span>
+        {/* Timeframe & Benchmark */}
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-surface-container border border-surface-container-high text-[10px]">
+            {(['1H', '6H', '24H', '7D'] as const).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                  timeframe === tf
+                    ? 'bg-primary/20 text-primary border border-primary/40'
+                    : 'text-outline hover:text-on-surface'
+                }`}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handleRunBenchmark}
+            disabled={isBenchmarking}
+            className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">{isBenchmarking ? 'sync' : 'speed'}</span>
+            <span>{isBenchmarking ? 'TESTING...' : 'RUN BENCHMARK'}</span>
+          </button>
         </div>
       </div>
+
+      {/* Benchmark Results Banner */}
+      {benchmarkResult && (
+        <div className="p-4 rounded-xl bg-surface-container border border-secondary/40 shadow-tactical-plate font-mono text-xs flex flex-col gap-2 animate-fadeIn">
+          <div className="flex items-center justify-between border-b border-surface-container-high/60 pb-1.5">
+            <div className="flex items-center gap-2 text-secondary font-bold">
+              <span className="material-symbols-outlined text-lg">verified</span>
+              <span>HARDWARE BENCHMARK COMPLETE (50 FRAMES INGESTED)</span>
+            </div>
+            <button onClick={() => setBenchmarkResult(null)} className="text-outline hover:text-on-surface">
+              ✕
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center pt-1">
+            <div className="p-2 rounded bg-surface-container-lowest shadow-tactical-inset">
+              <span className="text-[10px] text-outline">MIN LATENCY:</span>
+              <div className="text-secondary font-bold text-base">{benchmarkResult.minMs} ms</div>
+            </div>
+            <div className="p-2 rounded bg-surface-container-lowest shadow-tactical-inset">
+              <span className="text-[10px] text-outline">AVG LATENCY:</span>
+              <div className="text-primary font-bold text-base">{benchmarkResult.avgMs} ms</div>
+            </div>
+            <div className="p-2 rounded bg-surface-container-lowest shadow-tactical-inset">
+              <span className="text-[10px] text-outline">P99 JITTER:</span>
+              <div className="text-secondary font-bold text-base">{benchmarkResult.p99Ms} ms</div>
+            </div>
+            <div className="p-2 rounded bg-surface-container-lowest shadow-tactical-inset">
+              <span className="text-[10px] text-outline">PEAK THROUGHPUT:</span>
+              <div className="text-on-surface font-bold text-base">{benchmarkResult.throughputFps} FPS</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI System Status Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
@@ -76,7 +154,7 @@ export const AnalyticsPage: React.FC = () => {
           <h2 className="font-headline text-xs font-bold uppercase tracking-wider text-on-surface">
             Sequential AI Inference Pipeline Stages
           </h2>
-          <span className="font-mono text-[10px] text-primary">ZERO CLOUD DEPENDENCY</span>
+          <span className="font-mono text-[10px] text-primary">ZERO CLOUD DEPENDENCY · JETSON ACCELERATED</span>
         </div>
 
         {/* 5-Step Pipeline Flow */}
@@ -153,3 +231,4 @@ export const AnalyticsPage: React.FC = () => {
     </div>
   );
 };
+

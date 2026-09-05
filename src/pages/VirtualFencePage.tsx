@@ -8,8 +8,9 @@ export const VirtualFencePage: React.FC = () => {
   const [fences, setFences] = useState<VirtualFence[]>([]);
   const [threshold, setThreshold] = useState<number>(85.0);
   const [isActive, setIsActive] = useState<boolean>(true);
+  const [zoneName, setZoneName] = useState<string>('Zone Alpha');
 
-  const { isFenceBreached, activeAlert } = useDemo();
+  const { isFenceBreached, activeAlert, triggerBreach, resetDemo } = useDemo();
 
   useEffect(() => {
     const fetchFences = async () => {
@@ -18,6 +19,7 @@ export const VirtualFencePage: React.FC = () => {
       if (data.length > 0) {
         setIsActive(data[0].status === 'ACTIVE');
         setThreshold(data[0].confidenceThreshold);
+        setZoneName(data[0].name || 'Zone Alpha');
       }
     };
     fetchFences();
@@ -49,17 +51,21 @@ export const VirtualFencePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Breach Indicator */}
+        {/* Breach Indicator & Actions */}
         <div className="flex items-center gap-2 font-mono text-xs">
-          <span
-            className={`px-3 py-1.5 rounded-lg border font-bold uppercase ${
+          <button
+            onClick={isFenceBreached ? resetDemo : triggerBreach}
+            className={`px-3 py-1.5 rounded-lg border font-bold uppercase transition-all shadow-md flex items-center gap-1.5 ${
               isFenceBreached
-                ? 'bg-error-container text-error border-error animate-pulse'
-                : 'bg-surface-container text-secondary border-secondary/30'
+                ? 'bg-secondary text-on-secondary border-secondary hover:bg-secondary/90'
+                : 'bg-error-container text-on-error border-error/50 hover:bg-error animate-pulse'
             }`}
           >
-            {isFenceBreached ? '⚠️ TRIPWIRE BREACHED | ALT-7821' : 'ZONE ALPHA SECURE'}
-          </span>
+            <span className="material-symbols-outlined text-[16px]">
+              {isFenceBreached ? 'check_circle' : 'crisis_alert'}
+            </span>
+            <span>{isFenceBreached ? 'RESET BREACH STATE' : 'TEST TRIPWIRE BREACH'}</span>
+          </button>
         </div>
       </div>
 
@@ -76,7 +82,7 @@ export const VirtualFencePage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-surface-container-high/50 pb-3">
               <div className="flex flex-col">
                 <span className="font-headline text-sm font-bold text-on-surface uppercase">
-                  Zone Alpha Configuration
+                  {zoneName} Configuration
                 </span>
                 <span className="font-mono text-[11px] text-outline">
                   SECTOR 07 PRIMARY TRIPWIRE
@@ -93,6 +99,30 @@ export const VirtualFencePage: React.FC = () => {
               >
                 {isActive ? 'STATUS: ACTIVE' : 'STATUS: INACTIVE'}
               </button>
+            </div>
+
+            {/* Sensitivity Presets */}
+            <div className="flex flex-col gap-1.5 font-mono text-xs">
+              <span className="text-outline uppercase text-[11px]">Threshold Presets:</span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { label: 'HIGH (95%)', val: 95 },
+                  { label: 'BALANCED (85%)', val: 85 },
+                  { label: 'SENSITIVE (70%)', val: 70 },
+                ].map((preset) => (
+                  <button
+                    key={preset.val}
+                    onClick={() => setThreshold(preset.val)}
+                    className={`p-1.5 rounded text-[10px] font-semibold transition-colors ${
+                      threshold === preset.val
+                        ? 'bg-primary/20 text-primary border border-primary/40'
+                        : 'bg-surface-container-lowest text-outline hover:text-on-surface border border-surface-container-high'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Threshold Slider */}
@@ -160,3 +190,4 @@ export const VirtualFencePage: React.FC = () => {
     </div>
   );
 };
+

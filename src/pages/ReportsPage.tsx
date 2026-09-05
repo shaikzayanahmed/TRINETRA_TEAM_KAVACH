@@ -6,6 +6,7 @@ export const ReportsPage: React.FC = () => {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [reportGenerated, setReportGenerated] = useState<boolean>(false);
   const [reportData, setReportData] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -20,6 +21,54 @@ export const ReportsPage: React.FC = () => {
     setReportData(result);
     setReportGenerated(true);
   };
+
+  const handleDownloadReport = () => {
+    if (!reportData) return;
+    const reportText = `=====================================================
+TRINETRA TACTICAL INCIDENT & PERIMETER REPORT
+Report ID: ${reportData.reportId}
+Generated At: ${reportData.generatedAt}
+Sector: ${reportData.sector}
+=====================================================
+SUMMARY:
+${reportData.summary}
+
+ACTIVE TARGET: ${reportData.activeTarget}
+BREACHES RECORDED: ${reportData.totalBreaches}
+CRYPTOGRAPHIC MERKLE ROOT:
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+STATUS: ${reportData.status} (DPDPA AUDIT READY)
+=====================================================`;
+
+    const dataStr = 'data:text/plain;charset=utf-8,' + encodeURIComponent(reportText);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `TRINETRA_REPORT_${reportData.reportId}.txt`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleExportLedger = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(auditEvents, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `AUDIT_LEDGER_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const filteredEvents = auditEvents.filter((ev) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      ev.id.toLowerCase().includes(term) ||
+      ev.eventType.toLowerCase().includes(term) ||
+      ev.details.toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="flex flex-col gap-4 select-none">
@@ -39,13 +88,23 @@ export const ReportsPage: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={handleGenerateReport}
-          className="px-4 py-2 rounded-lg bg-primary text-on-primary font-mono text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center gap-1.5"
-        >
-          <span className="material-symbols-outlined text-[16px]">summarize</span>
-          <span>GENERATE TACTICAL REPORT</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <button
+            onClick={handleExportLedger}
+            className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary border border-primary/30 transition-colors flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">download</span>
+            <span>EXPORT LEDGER (JSON)</span>
+          </button>
+
+          <button
+            onClick={handleGenerateReport}
+            className="px-4 py-1.5 rounded-lg bg-primary text-on-primary font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">summarize</span>
+            <span>GENERATE REPORT</span>
+          </button>
+        </div>
       </div>
 
       {/* Summary KPI Cards */}
@@ -83,13 +142,24 @@ export const ReportsPage: React.FC = () => {
               <span className="material-symbols-outlined text-secondary text-lg">check_circle</span>
               <span className="font-bold text-on-surface">INCIDENT REPORT GENERATED: {reportData.reportId}</span>
             </div>
-            <span className="text-primary font-bold">{reportData.generatedAt}</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadReport}
+                className="px-2.5 py-1 rounded bg-surface-container-high hover:bg-surface-container-highest text-primary font-bold border border-primary/30 flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[14px]">download</span>
+                <span>DOWNLOAD TXT</span>
+              </button>
+              <button onClick={() => setReportGenerated(false)} className="text-outline hover:text-on-surface">
+                ✕
+              </button>
+            </div>
           </div>
           <p className="font-body text-xs text-on-surface-variant leading-relaxed">
             {reportData.summary} Sector: {reportData.sector}. Primary Interception Target: {reportData.activeTarget} in Zone Alpha.
           </p>
-          <div className="flex items-center justify-between pt-1 text-[11px] text-outline">
-            <span>CHAIN HASH: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
+          <div className="flex flex-wrap items-center justify-between pt-1 text-[11px] text-outline gap-2">
+            <span className="truncate max-w-sm">CHAIN HASH: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
             <span className="text-secondary font-bold">STATUS: DPDPA AUDIT READY</span>
           </div>
         </div>
@@ -124,14 +194,28 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Audit Trail Table */}
+      {/* Audit Trail Table with Search */}
       <div className="p-5 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-3 font-mono text-xs">
-        <span className="font-bold text-on-surface uppercase border-b border-surface-container-high/40 pb-2">
-          Immutable Cryptographic Audit Events
-        </span>
+        <div className="flex flex-wrap items-center justify-between border-b border-surface-container-high/40 pb-2 gap-2">
+          <span className="font-bold text-on-surface uppercase">
+            Immutable Cryptographic Audit Events ({filteredEvents.length})
+          </span>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search audit trail..."
+              className="pl-7 pr-2 py-1 rounded bg-surface-container-lowest border border-surface-container-high text-xs text-on-surface placeholder:text-outline shadow-tactical-inset"
+            />
+            <span className="material-symbols-outlined absolute left-2 top-1 text-outline text-[14px]">
+              search
+            </span>
+          </div>
+        </div>
 
-        <div className="flex flex-col gap-2">
-          {auditEvents.map((event) => (
+        <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto pr-1">
+          {filteredEvents.map((event) => (
             <div
               key={event.id}
               className="p-3 rounded-lg bg-surface-container-lowest border border-surface-container-high/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
@@ -157,3 +241,4 @@ export const ReportsPage: React.FC = () => {
     </div>
   );
 };
+

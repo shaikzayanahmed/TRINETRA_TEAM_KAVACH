@@ -7,13 +7,30 @@ import { VideoStreamFeed } from './VideoStreamFeed';
 interface CameraPanelProps {
   camera: Camera;
   showDetection?: boolean;
+  opticalFilter?: 'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS';
 }
 
-export const CameraPanel: React.FC<CameraPanelProps> = ({ camera, showDetection = true }) => {
+export const CameraPanel: React.FC<CameraPanelProps> = ({
+  camera,
+  showDetection = true,
+  opticalFilter = 'STANDARD',
+}) => {
   const isRGB = camera.type === 'RGB';
   const [isStreamMode, setIsStreamMode] = useState<boolean>(!isRGB); // Default non-RGB to active stream/selector mode so users can instantly feed video/VLC
 
   const isOnline = isRGB ? camera.status === 'ONLINE' : isStreamMode;
+
+  const getFilterClass = () => {
+    switch (opticalFilter) {
+      case 'CONTRAST_ENHANCED':
+        return 'contrast-[1.35] brightness-105 saturate-[1.25]';
+      case 'HIGH_PASS':
+        return 'contrast-[1.9] brightness-110 saturate-[0.2]';
+      case 'STANDARD':
+      default:
+        return '';
+    }
+  };
 
   return (
     <div className="rounded-xl overflow-hidden bg-surface-container-low border border-surface-container-high/60 shadow-[-3px_-3px_7px_rgba(255,255,255,0.03),4px_4px_10px_rgba(0,0,0,0.55)] flex flex-col select-none">
@@ -76,7 +93,7 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({ camera, showDetection 
       </div>
 
       {/* Video Content */}
-      <div className="w-full">
+      <div className={`w-full transition-all duration-300 ${getFilterClass()}`}>
         {isRGB ? (
           <WebcamFeed showDetection={showDetection} />
         ) : isStreamMode ? (

@@ -36,6 +36,7 @@ export interface AnprRecord {
   isFlagged: boolean;
   securityClearance: 'AUTHORIZED' | 'SUSPICIOUS' | 'UNREGISTERED';
   flagReason?: string;
+  plateCropUrl?: string;
 }
 
 export interface Target {

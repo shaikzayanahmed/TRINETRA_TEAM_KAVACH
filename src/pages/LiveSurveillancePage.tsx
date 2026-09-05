@@ -97,7 +97,7 @@ export const LiveSurveillancePage: React.FC = () => {
             selectedFeed === 'CAM-RGB-01' ? 'ring-1 ring-primary/60 rounded-xl' : 'opacity-90'
           }`}
         >
-          <CameraPanel camera={cameras[0]} showDetection={showOverlays} />
+          <CameraPanel camera={cameras[0]} showDetection={showOverlays} opticalFilter={opticalFilter} />
         </div>
 
         {/* Secondary LWIR Thermal / Custom Stream Camera */}
@@ -107,7 +107,7 @@ export const LiveSurveillancePage: React.FC = () => {
             selectedFeed === 'CAM-LWIR-01' ? 'ring-1 ring-tertiary/60 rounded-xl' : 'opacity-90'
           }`}
         >
-          <CameraPanel camera={cameras[1]} showDetection={showOverlays} />
+          <CameraPanel camera={cameras[1]} showDetection={showOverlays} opticalFilter={opticalFilter} />
         </div>
       </div>
 

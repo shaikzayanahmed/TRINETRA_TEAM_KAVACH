@@ -44,9 +44,68 @@ export const AlertsPage: React.FC = () => {
     }
   };
 
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  const handleSimulateThreat = () => {
+    const newId = `ALT-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newAlert: Alert = {
+      id: newId,
+      title: 'Perimeter Virtual Tripwire Breach',
+      description: 'Dynamic neural network detection classified unauthorized intruder crossing Zone Alpha boundary in Sector 07.',
+      type: 'VIRTUAL_FENCE_BREACH',
+      severity: 'CRITICAL',
+      status: 'NEW',
+      targetId: `TGT-${Math.floor(2000 + Math.random() * 1000)}`,
+      targetClassification: 'PERSON',
+      confidence: 97.4,
+      cameraId: 'CAM-RGB-01',
+      zone: 'Zone Alpha',
+      sector: 'Sector 07',
+      timestamp: new Date().toLocaleTimeString(),
+      evidenceId: `EV-${Math.floor(100 + Math.random() * 900)}`,
+      sha256Hash: Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
+    };
+
+    setAlerts((prev) => [newAlert, ...prev]);
+    setSelectedAlert(newAlert);
+  };
+
+  const handleResolveAll = async () => {
+    setAlerts((prev) =>
+      prev.map((a) => ({
+        ...a,
+        status: 'RESOLVED',
+        resolvedAt: new Date().toLocaleTimeString(),
+        resolvedBy: 'Sector Operator',
+      }))
+    );
+    if (selectedAlert) {
+      setSelectedAlert((prev) => (prev ? { ...prev, status: 'RESOLVED' } : null));
+    }
+  };
+
+  const handleExportAlerts = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(alerts, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `TRINETRA_ALERTS_LOG_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
   const filteredAlerts = alerts.filter((a) => {
     if (filterSeverity !== 'ALL' && a.severity !== filterSeverity) return false;
     if (filterStatus !== 'ALL' && a.status !== filterStatus) return false;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      return (
+        a.id.toLowerCase().includes(term) ||
+        a.title.toLowerCase().includes(term) ||
+        a.targetId.toLowerCase().includes(term) ||
+        a.targetClassification.toLowerCase().includes(term)
+      );
+    }
     return true;
   });
 
@@ -68,12 +127,55 @@ export const AlertsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-2 font-mono text-xs">
+        {/* Quick Threat Generator & Bulk Actions */}
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          <button
+            onClick={handleSimulateThreat}
+            className="px-3 py-1.5 rounded-lg bg-error text-on-error font-bold uppercase tracking-wider hover:bg-error/90 transition-all shadow-[0_0_12px_rgba(255,84,73,0.35)] flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">add_alert</span>
+            <span>SIMULATE THREAT</span>
+          </button>
+
+          <button
+            onClick={handleResolveAll}
+            className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-secondary border border-secondary/30 font-bold transition-colors flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">done_all</span>
+            <span>RESOLVE ALL</span>
+          </button>
+
+          <button
+            onClick={handleExportAlerts}
+            className="px-2.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary border border-primary/30 transition-colors flex items-center gap-1"
+            title="Export Alerts as JSON"
+          >
+            <span className="material-symbols-outlined text-[16px]">download</span>
+            <span>EXPORT</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+        <div className="relative flex-1 min-w-[200px]">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by Alert ID, target, class..."
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-surface-container-lowest border border-surface-container-high text-on-surface placeholder:text-outline text-xs focus:outline-none focus:border-primary shadow-tactical-inset"
+          />
+          <span className="material-symbols-outlined absolute left-2.5 top-1.5 text-outline text-[16px]">
+            search
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
           <select
             value={filterSeverity}
             onChange={(e) => setFilterSeverity(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface focus:outline-none focus:border-primary"
+            className="px-2.5 py-1.5 rounded-lg bg-surface-container-lowest border border-surface-container-high text-on-surface focus:outline-none focus:border-primary shadow-tactical-inset"
           >
             <option value="ALL">ALL SEVERITIES</option>
             <option value="CRITICAL">CRITICAL</option>
@@ -85,13 +187,27 @@ export const AlertsPage: React.FC = () => {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface focus:outline-none focus:border-primary"
+            className="px-2.5 py-1.5 rounded-lg bg-surface-container-lowest border border-surface-container-high text-on-surface focus:outline-none focus:border-primary shadow-tactical-inset"
           >
             <option value="ALL">ALL STATUSES</option>
             <option value="NEW">NEW</option>
             <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
             <option value="RESOLVED">RESOLVED</option>
           </select>
+
+          {(filterSeverity !== 'ALL' || filterStatus !== 'ALL' || searchTerm) && (
+            <button
+              onClick={() => {
+                setFilterSeverity('ALL');
+                setFilterStatus('ALL');
+                setSearchTerm('');
+              }}
+              className="px-2 py-1.5 rounded bg-surface-container text-outline hover:text-on-surface"
+              title="Reset Filters"
+            >
+              RESET
+            </button>
+          )}
         </div>
       </div>
 

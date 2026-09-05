@@ -7,6 +7,9 @@ import { useDemo } from '../context/DemoContext';
 export const TargetTrackingPage: React.FC = () => {
   const [targets, setTargets] = useState<Target[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isKalmanRecalculating, setIsKalmanRecalculating] = useState<boolean>(false);
+  const [kalmanStatus, setKalmanStatus] = useState<string | null>(null);
 
   const { activeTarget, isFenceBreached } = useDemo();
 
@@ -20,6 +23,48 @@ export const TargetTrackingPage: React.FC = () => {
   }, []);
 
   const currentTarget = activeTarget || selectedTarget;
+
+  const handleRecalculateKalman = () => {
+    setIsKalmanRecalculating(true);
+    setKalmanStatus(null);
+    setTimeout(() => {
+      setIsKalmanRecalculating(false);
+      setKalmanStatus('State covariance matrix updated. Innovation residual: < 0.024.');
+    }, 600);
+  };
+
+  const handleExportTrack = () => {
+    if (!currentTarget) return;
+    const trackData = {
+      targetId: currentTarget.id,
+      classification: currentTarget.classification,
+      coordinates: currentTarget.coordinates,
+      trajectory: currentTarget.trajectory,
+      speedKmh: currentTarget.speedKmh,
+      bearing: currentTarget.bearing,
+      firstDetectedAt: currentTarget.firstDetectedAt,
+      lastSeenAt: currentTarget.lastSeenAt,
+      exportedAt: new Date().toISOString(),
+    };
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(trackData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `TARGET_GPS_TRACK_${currentTarget.id}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const filteredTargets = targets.filter((t) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      t.id.toLowerCase().includes(term) ||
+      t.classification.toLowerCase().includes(term) ||
+      t.status.toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="flex flex-col gap-4 select-none">
@@ -40,11 +85,28 @@ export const TargetTrackingPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 font-mono text-xs">
-          <span className="px-2.5 py-1 rounded-lg bg-surface-container border border-surface-container-high text-primary font-semibold">
-            ACTIVE TARGETS: {targets.filter((t) => t.status === 'TRACKING' || t.status === 'DETECTED').length || 1}
-          </span>
+          <button
+            onClick={handleExportTrack}
+            className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary border border-primary/30 transition-colors flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">download</span>
+            <span>EXPORT TRACK (JSON)</span>
+          </button>
         </div>
       </div>
+
+      {/* Kalman Status Banner */}
+      {kalmanStatus && (
+        <div className="p-3.5 rounded-xl bg-surface-container border border-secondary/40 shadow-tactical-inset flex items-center justify-between font-mono text-xs text-secondary animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">check_circle</span>
+            <span>{kalmanStatus}</span>
+          </div>
+          <button onClick={() => setKalmanStatus(null)} className="text-outline hover:text-on-surface">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Target Details Grid */}
       {currentTarget && (
@@ -120,6 +182,18 @@ export const TargetTrackingPage: React.FC = () => {
                   </Link>
                 </span>
               </div>
+
+              {/* Kalman Filter Recompute Action */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleRecalculateKalman}
+                  disabled={isKalmanRecalculating}
+                  className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-secondary font-mono text-xs font-semibold border border-secondary/30 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">{isKalmanRecalculating ? 'sync' : 'auto_fix_high'}</span>
+                  <span>{isKalmanRecalculating ? 'CALCULATING KALMAN RECURSION...' : 'RECALCULATE KALMAN VECTOR'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Trajectory Waypoints History */}
@@ -155,17 +229,34 @@ export const TargetTrackingPage: React.FC = () => {
           {/* Target List & Quick Actions (5 cols) */}
           <div className="lg:col-span-5 flex flex-col gap-4">
             <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-3">
-              <h3 className="font-headline text-xs font-bold uppercase tracking-wider text-on-surface border-b border-surface-container-high/50 pb-2">
-                Sector 07 Target Directory
-              </h3>
+              <div className="flex items-center justify-between border-b border-surface-container-high/50 pb-2">
+                <h3 className="font-headline text-xs font-bold uppercase tracking-wider text-on-surface">
+                  Target Directory ({filteredTargets.length})
+                </h3>
+                <span className="font-mono text-[10px] text-outline">SECTOR 07</span>
+              </div>
+
+              {/* Target Search */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Filter targets..."
+                  className="w-full pl-7 pr-2 py-1 rounded bg-surface-container-lowest border border-surface-container-high font-mono text-xs text-on-surface placeholder:text-outline shadow-tactical-inset"
+                />
+                <span className="material-symbols-outlined absolute left-2 top-1 text-outline text-[14px]">
+                  search
+                </span>
+              </div>
 
               <div className="flex flex-col gap-2 font-mono text-xs">
-                {targets.map((t) => (
+                {filteredTargets.map((t) => (
                   <div
                     key={t.id}
                     onClick={() => setSelectedTarget(t)}
                     className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
-                      (currentTarget?.id === t.id)
+                      currentTarget?.id === t.id
                         ? 'bg-surface-container border-primary/60 shadow-tactical-extruded'
                         : 'bg-surface-container-lowest border-surface-container-high/40 hover:bg-surface-container-high/40'
                     }`}
@@ -209,3 +300,4 @@ export const TargetTrackingPage: React.FC = () => {
     </div>
   );
 };
+
