@@ -70,7 +70,7 @@ class VisionAiService {
   }
 
   /**
-   * Assign or match persistent tracking IDs using spatial centroid proximity
+   * Assign or match persistent tracking IDs using spatial centroid proximity & execute OCR for vehicles
    */
   private matchOrCreateTrack(
     className: string,
@@ -80,7 +80,8 @@ class VisionAiService {
     normH: number,
     score: number,
     rawBbox: [number, number, number, number],
-    now: number
+    now: number,
+    videoElement?: HTMLVideoElement
   ): { id: string; anpr?: AnprRecord } {
     const cx = normX + normW / 2;
     const cy = normY + normH / 2;
@@ -116,6 +117,12 @@ class VisionAiService {
       existing.height = normH;
       existing.score = score;
       existing.lastSeenMs = now;
+
+      // Update ANPR with latest OCR recognizer result
+      if (isVehicle) {
+        existing.anpr = anprService.recognizePlate(existing.id, upperClass, rawBbox, videoElement);
+      }
+
       return { id: existing.id, anpr: existing.anpr };
     }
 
@@ -129,7 +136,7 @@ class VisionAiService {
       newId = `TGT-E${this.nextEntityId++}`;
     }
 
-    const anpr = isVehicle ? anprService.recognizePlate(newId, upperClass, rawBbox) : undefined;
+    const anpr = isVehicle ? anprService.recognizePlate(newId, upperClass, rawBbox, videoElement) : undefined;
 
     const newTrack: ActiveTrack = {
       id: newId,
@@ -194,7 +201,7 @@ class VisionAiService {
         const score = Math.round(pred.score * 1000) / 10;
         const upperClass = pred.class.toUpperCase();
 
-        // Assign persistent unique tracking ID for each human and vehicle
+        // Assign persistent unique tracking ID for each human and vehicle with OCR
         const { id: targetId, anpr } = this.matchOrCreateTrack(
           pred.class,
           normX,
@@ -203,7 +210,8 @@ class VisionAiService {
           normH,
           score,
           pred.bbox,
-          now
+          now,
+          videoElement
         );
 
         return {
