@@ -242,6 +242,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
                 key={det.id}
                 liveDetection={det}
                 isBreached={false}
+                isTripwireDisabled={true}
                 isThermal={spectralFilter !== 'OPTICAL'}
               />
             ))}

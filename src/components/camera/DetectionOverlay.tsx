@@ -7,6 +7,7 @@ interface DetectionOverlayProps {
   liveDetection?: LiveDetectionResult;
   isBreached?: boolean;
   isThermal?: boolean;
+  isTripwireDisabled?: boolean;
 }
 
 export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
@@ -14,6 +15,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   liveDetection,
   isBreached = false,
   isThermal = false,
+  isTripwireDisabled = false,
 }) => {
   // Use live vision detection bounding box if available, otherwise fallback to target trajectory/mock
   const bbox = liveDetection?.bbox || {
@@ -23,7 +25,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     height: target?.trajectory[target.trajectory.length - 1]?.height || 48,
   };
 
-  const breachState = liveDetection?.isTripwireBreach || isBreached;
+  const breachState = !isTripwireDisabled && (liveDetection?.isTripwireBreach || isBreached);
   const classification = liveDetection?.class || target?.classification || 'PERSON';
   const confidence = liveDetection?.score || target?.confidence || 96.8;
   const targetId = liveDetection?.id || target?.id || 'TGT-V201';

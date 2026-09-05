@@ -119,6 +119,12 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
         </div>
       </div>
 
+      {/* Zone Alpha Virtual Tripwire Visual Boundary on Screen (Right 50%) */}
+      <div className="absolute right-0 top-0 bottom-0 w-[50%] border-l border-dashed border-primary/30 bg-primary/5 pointer-events-none flex flex-col justify-between p-2 font-mono text-[9px] text-primary/70">
+        <span className="self-end">[ ZONE ALPHA TRIPWIRE BOUNDARY ]</span>
+        <span className="self-end">SPATIAL HEURISTIC FILTER ACTIVE</span>
+      </div>
+
       {/* Live AI Detections (Real Neural Network Running on Webcam) */}
       {hasPermission && hasLiveDetections && liveDetections.map((det) => (
         <DetectionOverlay
