@@ -100,14 +100,14 @@ export const LiveSurveillancePage: React.FC = () => {
           <CameraPanel camera={cameras[0]} showDetection={showOverlays} />
         </div>
 
-        {/* Secondary LWIR Thermal Camera: Clean Waiting Placeholder */}
+        {/* Secondary LWIR Thermal / Custom Stream Camera */}
         <div
           onClick={() => setSelectedFeed('CAM-LWIR-01')}
           className={`flex flex-col gap-2 cursor-pointer transition-all ${
             selectedFeed === 'CAM-LWIR-01' ? 'ring-1 ring-tertiary/60 rounded-xl' : 'opacity-90'
           }`}
         >
-          <CameraPanel camera={cameras[1]} showDetection={false} />
+          <CameraPanel camera={cameras[1]} showDetection={showOverlays} />
         </div>
       </div>
 

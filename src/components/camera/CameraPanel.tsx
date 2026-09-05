@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Camera } from '../../types';
 import { WebcamFeed } from './WebcamFeed';
 import { ThermalFeedPlaceholder } from './ThermalFeedPlaceholder';
+import { VideoStreamFeed } from './VideoStreamFeed';
 
 interface CameraPanelProps {
   camera: Camera;
@@ -10,7 +11,9 @@ interface CameraPanelProps {
 
 export const CameraPanel: React.FC<CameraPanelProps> = ({ camera, showDetection = true }) => {
   const isRGB = camera.type === 'RGB';
-  const isOnline = camera.status === 'ONLINE';
+  const [isStreamMode, setIsStreamMode] = useState<boolean>(!isRGB); // Default non-RGB to active stream/selector mode so users can instantly feed video/VLC
+
+  const isOnline = isRGB ? camera.status === 'ONLINE' : isStreamMode;
 
   return (
     <div className="rounded-xl overflow-hidden bg-surface-container-low border border-surface-container-high/60 shadow-[-3px_-3px_7px_rgba(255,255,255,0.03),4px_4px_10px_rgba(0,0,0,0.55)] flex flex-col select-none">
@@ -22,13 +25,40 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({ camera, showDetection 
               isRGB ? 'text-on-surface' : 'text-tertiary'
             }`}
           >
-            {camera.name}
+            {isRGB ? camera.name : isStreamMode ? 'CUSTOM FEED / VLC STREAM' : camera.name}
           </span>
           <span className="text-outline-variant">·</span>
           <span className="text-outline text-[11px]">{camera.id}</span>
         </div>
 
         <div className="flex items-center gap-2 text-[11px]">
+          {/* Secondary Camera Mode Switcher (Standby vs Video/VLC Stream) */}
+          {!isRGB && (
+            <div className="flex items-center gap-1 bg-surface-container-high/80 rounded p-0.5 border border-surface-container-highest">
+              <button
+                onClick={() => setIsStreamMode(false)}
+                className={`px-1.5 py-0.2 rounded text-[10px] transition-colors ${
+                  !isStreamMode
+                    ? 'bg-surface-container-lowest text-tertiary font-bold'
+                    : 'text-outline hover:text-on-surface'
+                }`}
+              >
+                STANDBY
+              </button>
+              <button
+                onClick={() => setIsStreamMode(true)}
+                className={`px-1.5 py-0.2 rounded text-[10px] transition-colors flex items-center gap-1 ${
+                  isStreamMode
+                    ? 'bg-tertiary text-on-tertiary font-bold'
+                    : 'text-outline hover:text-tertiary'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[11px]">podcasts</span>
+                <span>VIDEO / VLC</span>
+              </button>
+            </div>
+          )}
+
           {isOnline ? (
             <span className="text-secondary font-semibold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
@@ -49,8 +79,13 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({ camera, showDetection 
       <div className="w-full">
         {isRGB ? (
           <WebcamFeed showDetection={showDetection} />
+        ) : isStreamMode ? (
+          <VideoStreamFeed
+            showDetection={showDetection}
+            onCloseStream={() => setIsStreamMode(false)}
+          />
         ) : (
-          <ThermalFeedPlaceholder />
+          <ThermalFeedPlaceholder onSelectStream={() => setIsStreamMode(true)} />
         )}
       </div>
 
@@ -58,10 +93,10 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({ camera, showDetection 
       <div className="p-2 sm:p-2.5 px-3 sm:px-4 bg-surface-container-lowest/90 border-t border-surface-container-high/40 flex items-center justify-between font-mono text-[11px] text-on-surface-variant">
         <span>FPS: {isOnline ? '29.97' : '0.00'}</span>
         <span className="hidden sm:inline">
-          BITRATE: {isOnline ? '4.8 KB/s METADATA' : '0.0 KB/s'}
+          BITRATE: {isOnline ? '5.4 MB/s H.264 / METADATA' : '0.0 KB/s'}
         </span>
         <span className={isOnline ? 'text-secondary font-semibold' : 'text-outline font-semibold'}>
-          STATE: {isOnline ? 'LOCKED / ACTIVE' : 'WAITING FOR INPUT'}
+          STATE: {isOnline ? 'STREAM ACTIVE / VEHICLE AI LOCKED' : 'WAITING FOR INPUT'}
         </span>
       </div>
     </div>

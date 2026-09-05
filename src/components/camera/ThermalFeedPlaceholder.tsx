@@ -1,6 +1,10 @@
 import React from 'react';
 
-export const ThermalFeedPlaceholder: React.FC = () => {
+interface ThermalFeedPlaceholderProps {
+  onSelectStream?: () => void;
+}
+
+export const ThermalFeedPlaceholder: React.FC<ThermalFeedPlaceholderProps> = ({ onSelectStream }) => {
   return (
     <div className="relative w-full aspect-video bg-surface-container-lowest overflow-hidden flex flex-col items-center justify-center p-6 select-none border border-surface-container-high/40">
       {/* Thermal Sensor Raster Grid (Simulated calibrated IR uncooled detector matrix) */}
@@ -20,9 +24,20 @@ export const ThermalFeedPlaceholder: React.FC = () => {
             [ WAITING FOR LWIR INPUT ]
           </span>
           <p className="font-mono text-[11px] text-outline mt-1 leading-relaxed">
-            Secondary LWIR uncooled sensor input pipeline is in standby. Awaiting hardware feed connection from Observation Post 07-Beta.
+            Secondary LWIR sensor input is in standby. You can feed a custom demo video or VLC network stream for live vehicle AI recognition.
           </p>
         </div>
+
+        {/* Action Button to Activate Custom Feed */}
+        {onSelectStream && (
+          <button
+            onClick={onSelectStream}
+            className="mt-1 px-3.5 py-2 rounded-xl bg-tertiary text-on-tertiary font-mono text-xs font-bold uppercase tracking-wider hover:bg-tertiary/90 transition-all shadow-[0_0_12px_rgba(255,183,125,0.25)] flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-base">video_library</span>
+            <span>SELECT VIDEO / VLC STREAM FEED</span>
+          </button>
+        )}
 
         {/* Integration Ready Badge */}
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container border border-surface-container-high font-mono text-[10px] text-on-surface-variant">
