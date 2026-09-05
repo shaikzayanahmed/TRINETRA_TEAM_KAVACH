@@ -2,6 +2,7 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import * as tf from '@tensorflow/tfjs';
 import { AnprRecord } from '../types';
 import { anprService } from './anprService';
+import { yoloService } from './yoloService';
 
 export type DetectionFilterMode = 'MOVING_VEHICLES' | 'ALL_VEHICLES' | 'ALL_OBJECTS';
 
@@ -30,6 +31,7 @@ export interface LiveDetectionResult {
   stillDurationSeconds: number;
   speedKmh: number;
   bearingLabel: string;
+  engine?: 'YOLOv8' | 'MobileNetV2';
 }
 
 interface TrackHistoryPoint {
@@ -66,7 +68,7 @@ class VisionAiService {
   private isLoading: boolean = false;
   private isReady: boolean = false;
 
-  // Offscreen fast inference canvas to prevent 1080p/4K GPU texture transfer lag
+  // Offscreen fast inference canvas
   private inferenceCanvas: HTMLCanvasElement | null = null;
   private inferenceCtx: CanvasRenderingContext2D | null = null;
   private readonly INFERENCE_WIDTH = 512;
@@ -79,12 +81,15 @@ class VisionAiService {
   private nextEntityId: number = 301;
 
   async loadModel(): Promise<boolean> {
-    if (this.isReady && this.model) return true;
+    if (this.isReady && (this.model || yoloService.isModelLoaded())) return true;
     if (this.isLoading) return false;
 
     this.isLoading = true;
     try {
-      // Enable high-performance WebGL backend with hardware packing
+      // Start YOLOv8 ONNX loading in parallel
+      yoloService.loadYoloModel().catch((e) => console.warn('YOLO loader background notice:', e));
+
+      // Enable high-performance WebGL backend for GPU acceleration
       if (tf.getBackend() !== 'webgl') {
         try {
           await tf.setBackend('webgl');
@@ -92,18 +97,17 @@ class VisionAiService {
           tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
           tf.env().set('WEBGL_CPU_FORWARD', false);
         } catch {
-          // Fallback to auto backend
+          // Auto fallback
         }
       }
 
       await tf.ready();
 
-      // Load full high-precision MobileNetV2 for superior accuracy & tighter bounding boxes
+      // High-precision MobileNetV2 backend
       this.model = await cocoSsd.load({
         base: 'mobilenet_v2',
       });
 
-      // Initialize offscreen canvas
       this.inferenceCanvas = document.createElement('canvas');
       this.inferenceCanvas.width = this.INFERENCE_WIDTH;
       this.inferenceCanvas.height = this.INFERENCE_HEIGHT;
@@ -120,7 +124,7 @@ class VisionAiService {
   }
 
   isModelLoaded(): boolean {
-    return this.isReady && !!this.model;
+    return this.isReady && (!!this.model || yoloService.isModelLoaded());
   }
 
   /**
@@ -378,33 +382,43 @@ class VisionAiService {
     const now = startTime;
 
     try {
-      // Fast downscale frame onto inference canvas to avoid 1080p/4K GPU transfer overhead
-      let sourceInput: HTMLCanvasElement | HTMLVideoElement = videoElement;
-      if (this.inferenceCanvas && this.inferenceCtx) {
-        this.inferenceCtx.drawImage(
-          videoElement,
-          0,
-          0,
-          this.INFERENCE_WIDTH,
-          this.INFERENCE_HEIGHT
-        );
-        sourceInput = this.inferenceCanvas;
+      let rawPredictions: Array<{ bbox: [number, number, number, number]; class: string; score: number }> = [];
+      let engine: 'YOLOv8' | 'MobileNetV2' = 'MobileNetV2';
+      let srcWidth = videoElement.videoWidth || 640;
+      let srcHeight = videoElement.videoHeight || 480;
+
+      if (yoloService.isModelLoaded()) {
+        const yoloDets = await yoloService.detect(videoElement, minConfidence);
+        rawPredictions = yoloDets;
+        engine = 'YOLOv8';
+      } else if (this.model) {
+        let sourceInput: HTMLCanvasElement | HTMLVideoElement = videoElement;
+        if (this.inferenceCanvas && this.inferenceCtx) {
+          this.inferenceCtx.drawImage(
+            videoElement,
+            0,
+            0,
+            this.INFERENCE_WIDTH,
+            this.INFERENCE_HEIGHT
+          );
+          sourceInput = this.inferenceCanvas;
+        }
+
+        const cocoDets = await this.model.detect(sourceInput, 8, minConfidence);
+        rawPredictions = cocoDets;
+        const isCanvas = sourceInput === this.inferenceCanvas;
+        srcWidth = isCanvas ? this.INFERENCE_WIDTH : (videoElement.videoWidth || 640);
+        srcHeight = isCanvas ? this.INFERENCE_HEIGHT : (videoElement.videoHeight || 480);
       }
 
-      // Run inference on downscaled canvas
-      const predictions = await this.model.detect(sourceInput, 8, minConfidence);
       const inferenceTimeMs = Math.round(performance.now() - startTime);
-
-      const isCanvas = sourceInput === this.inferenceCanvas;
-      const srcWidth = isCanvas ? this.INFERENCE_WIDTH : (videoElement.videoWidth || 640);
-      const srcHeight = isCanvas ? this.INFERENCE_HEIGHT : (videoElement.videoHeight || 480);
 
       // Clean up stale tracks
       this.pruneInactiveTracks(now);
 
       const mappedResults: LiveDetectionResult[] = [];
 
-      for (const pred of predictions) {
+      for (const pred of rawPredictions) {
         const [x, y, width, height] = pred.bbox;
         const upperClass = pred.class.toUpperCase();
         const isVehicle = VEHICLE_CLASSES.has(upperClass);
@@ -483,6 +497,7 @@ class VisionAiService {
           stillDurationSeconds,
           speedKmh,
           bearingLabel,
+          engine,
         });
       }
 
