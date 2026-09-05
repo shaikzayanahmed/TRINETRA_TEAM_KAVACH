@@ -54,8 +54,6 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     ? 'bg-surface-container-lowest/95 text-tertiary border-tertiary/80'
     : 'bg-surface-container-lowest/95 text-primary border-primary/80';
 
-  const isSuspiciousStill = liveDetection?.isSuspiciousStill || false;
-  const stillDurationSeconds = liveDetection?.stillDurationSeconds || 0;
   const isAnalyzed = Boolean(
     anpr?.isAnalyzed &&
     anpr?.plateNumber &&
@@ -75,20 +73,20 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     >
       {/* ========================================================================= */}
       {/* CROPPED NUMBER PLATE & TACTICAL ANPR CARD DISPLAYED DIRECTLY ABOVE THE CAR */}
-      {/* ONLY DISPLAYED ONCE ACCURATE OCR ANALYSIS IS VERIFIED (PREVENTS UI BUFFER) */}
+      {/* ONLY DISPLAYED FOR MOVING CARS WITH LIVE ANALYSIS */}
       {/* ========================================================================= */}
-      {isVehicle && isAnalyzed && anpr ? (
+      {isVehicle && isMoving && isAnalyzed && anpr ? (
         <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 z-30 flex flex-col items-center select-none pointer-events-auto">
           {/* Main Tactical ANPR Floating Card */}
           <div className={`backdrop-blur-md border rounded-md p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.9)] flex flex-col gap-1 min-w-[200px] max-w-[250px] text-on-surface ${
-            isSuspiciousStill || isFlagged
+            isFlagged
               ? 'bg-error-container/95 border-error text-error'
               : 'bg-surface-container-lowest/95 border-secondary/70'
           }`}>
-            {/* Top Bar: Target ID & Motion / Suspicious Still Status & Vehicle Color */}
+            {/* Top Bar: Target ID & Motion Status & Vehicle Color */}
             <div className="flex items-center justify-between gap-1 text-[9px] font-mono border-b border-surface-container-high/80 pb-0.5">
               <div className="flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${isSuspiciousStill || isFlagged ? 'bg-error animate-ping' : isMoving ? 'bg-secondary animate-pulse' : 'bg-outline'}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${isFlagged ? 'bg-error animate-ping' : 'bg-secondary animate-pulse'}`} />
                 <span className="font-bold text-secondary">{targetId}</span>
                 <span className="text-outline">·</span>
                 <span className="text-on-surface/80 uppercase">{classification}</span>
@@ -98,11 +96,11 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
               </div>
               <div className="flex items-center gap-1">
                 <span className={`px-1 py-0.2 rounded font-bold text-[8px] ${
-                  isSuspiciousStill || isFlagged
+                  isFlagged
                     ? 'bg-error text-on-error animate-pulse'
                     : 'bg-secondary/20 text-secondary border border-secondary/40'
                 }`}>
-                  {isSuspiciousStill ? `STILL ${stillDurationSeconds.toFixed(1)}s` : anpr.securityClearance}
+                  {anpr.securityClearance}
                 </span>
               </div>
             </div>
@@ -126,26 +124,17 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
                 {/* Optical Verification Pill */}
                 <div className="absolute top-0.5 right-0.5 px-1 py-0.2 bg-black/75 rounded text-[7px] font-mono text-secondary border border-secondary/30">
-                  {isSuspiciousStill ? 'STILL ANPR LOCK' : 'ANPR VERIFIED'}
+                  LIVE ANPR
                 </div>
               </div>
             )}
 
-            {/* Bottom Telemetry: Moving Speed / Still Duration & Vector */}
+            {/* Bottom Telemetry: Moving Speed & Heading Vector */}
             <div className="flex items-center justify-between text-[8px] font-mono text-outline pt-0.5">
-              <div className="flex items-center gap-1 font-bold">
-                {isSuspiciousStill ? (
-                  <span className="text-error flex items-center gap-0.5">
-                    <span className="material-symbols-outlined text-[10px]">timer</span>
-                    <span>STATIONARY {stillDurationSeconds.toFixed(1)}s [SUSPICIOUS]</span>
-                  </span>
-                ) : (
-                  <span className="text-secondary flex items-center gap-0.5">
-                    <span className="material-symbols-outlined text-[10px]">speed</span>
-                    <span>{speedKmh} KM/H</span>
-                    <span className="text-outline font-normal">| {bearingLabel}</span>
-                  </span>
-                )}
+              <div className="flex items-center gap-1 font-bold text-secondary">
+                <span className="material-symbols-outlined text-[10px]">speed</span>
+                <span>{speedKmh} KM/H</span>
+                <span className="text-outline font-normal">| {bearingLabel}</span>
               </div>
               <div className="text-secondary font-bold">
                 {anpr.confidence}% OCR
@@ -155,17 +144,17 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
           {/* Optical Connecting Anchor Line pointing down to top of car */}
           <div className="flex flex-col items-center">
-            <div className={`w-[1.5px] h-2 shadow-[0_0_4px_rgba(149,212,176,0.8)] ${isSuspiciousStill ? 'bg-error' : 'bg-secondary/80'}`} />
-            <div className={`w-1.5 h-1.5 rotate-45 -mt-0.5 shadow-[0_0_4px_rgba(149,212,176,0.8)] ${isSuspiciousStill ? 'bg-error' : 'bg-secondary'}`} />
+            <div className="w-[1.5px] h-2 bg-secondary/80 shadow-[0_0_4px_rgba(149,212,176,0.8)]" />
+            <div className="w-1.5 h-1.5 rotate-45 -mt-0.5 bg-secondary shadow-[0_0_4px_rgba(149,212,176,0.8)]" />
           </div>
         </div>
       ) : (
-        /* Lightweight classification header before ANPR analysis or for non-vehicle targets */
+        /* Lightweight classification header for non-moving / stationary cars or humans */
         <div
           className={`absolute -top-7 left-0 px-2 py-0.5 rounded border font-mono text-[10px] sm:text-[11px] font-bold whitespace-nowrap shadow-[2px_2px_6px_rgba(0,0,0,0.8)] flex items-center gap-1.5 ${badgeColor}`}
         >
           <span className={`w-1.5 h-1.5 rounded-full ${breachState ? 'bg-error animate-ping' : 'bg-current animate-pulse'}`} />
-          <span>{targetId} | {classification} {isVehicle ? '· ANALYZING...' : `| ${confidence}%`}</span>
+          <span>{targetId} | {classification} {isVehicle && isMoving ? '· MOVING' : `| ${confidence}%`}</span>
         </div>
       )}
 

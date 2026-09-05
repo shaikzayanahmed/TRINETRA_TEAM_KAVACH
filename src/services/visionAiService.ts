@@ -254,27 +254,19 @@ class VisionAiService {
       existing.speedKmh = speedKmh;
       existing.bearingLabel = bearingLabel;
 
-      // RULE: Only detect & attach ANPR number plate if:
-      // 1. Vehicle is actively moving, OR
-      // 2. Vehicle is a suspicious long-time still vehicle (loitering in perimeter)
+      // RULE: Only detect & attach ANPR number plate for actively moving vehicles
       let anprRecord: AnprRecord | undefined;
-      const shouldDetectPlate = isVehicle && (isMoving || isSuspiciousStill);
+      const shouldDetectPlate = isVehicle && isMoving;
 
       if (shouldDetectPlate) {
         anprRecord = anprService.recognizePlate(existing.id, upperClass, rawBbox, videoElement);
         anprRecord.speedKmh = speedKmh;
-        anprRecord.motionStatus = isMoving ? 'MOVING' : 'STATIONARY';
+        anprRecord.motionStatus = 'MOVING';
         anprRecord.bearing = bearingLabel;
-
-        if (isSuspiciousStill) {
-          anprRecord.isFlagged = true;
-          anprRecord.securityClearance = 'SUSPICIOUS';
-          anprRecord.flagReason = `Prolonged stationary vehicle loitering in perimeter (${stillDurationSeconds.toFixed(1)}s)`;
-        }
 
         existing.anpr = anprRecord;
       } else {
-        // Neutral static car: clear ANPR plate so it doesn't clutter the screen
+        // Non-moving / static car: clear ANPR plate so it doesn't clutter the screen or UI
         existing.anpr = undefined;
       }
 
