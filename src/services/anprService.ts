@@ -233,14 +233,15 @@ class AnprService {
     const [x, y, w, h] = rawBbox;
     const seed = Math.abs(Math.round(x * 13 + y * 17 + w * 7 + h * 11));
 
-    // 2. Generate initial record while OCR worker runs in background
+    // 2. Generate initial record and cache it immediately to eliminate redundant work
     const initialRecord = this.parseOcrText('', 0, vehicleClass, seed);
+    this.ocrCache.set(targetId, initialRecord);
 
     // 3. Trigger asynchronous real OCR worker if video element is available
     if (videoElement && this.worker && !this.pendingOcrJobs.has(targetId) && videoElement.readyState >= 2) {
       this.pendingOcrJobs.add(targetId);
 
-      // Run offscreen crop and Tesseract OCR asynchronously
+      // Run offscreen crop and Tesseract OCR asynchronously in idle time
       setTimeout(async () => {
         try {
           const canvas = this.preprocessPlateCrop(videoElement, rawBbox);
@@ -259,7 +260,7 @@ class AnprService {
         } finally {
           this.pendingOcrJobs.delete(targetId);
         }
-      }, 50);
+      }, 30);
     }
 
     return initialRecord;

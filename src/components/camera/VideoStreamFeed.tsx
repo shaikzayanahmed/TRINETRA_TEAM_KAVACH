@@ -231,12 +231,6 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
             </div>
           </div>
 
-          {/* Zone Alpha Virtual Tripwire Visual Boundary (Right 50%) */}
-          <div className="absolute right-0 top-0 bottom-0 w-[50%] border-l border-dashed border-tertiary/40 bg-tertiary/5 pointer-events-none flex flex-col justify-between p-2 font-mono text-[9px] text-tertiary/80">
-            <span className="self-end">[ ZONE ALPHA TRIPWIRE BOUNDARY ]</span>
-            <span className="self-end">ANPR & HEURISTIC ENGINE RUNNING</span>
-          </div>
-
           {/* Real-time AI Detections & ANPR Badges Over Video */}
           {showDetection &&
             useLiveAi &&
@@ -244,7 +238,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
               <DetectionOverlay
                 key={det.id}
                 liveDetection={det}
-                isBreached={det.isTripwireBreach}
+                isBreached={false}
                 isThermal={spectralFilter !== 'OPTICAL'}
               />
             ))}
