@@ -55,10 +55,11 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Live Vision AI Object Detection + ANPR Hook
-  const { isModelReady, liveDetections, lastInferenceTimeMs, fps } = useLiveVision(videoRef, {
+  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !!videoSrc && isPlaying,
     detectionIntervalMs: 60,
     filterMode,
+    minConfidence: 0.35,
   });
 
   // Handle local video file upload
@@ -536,7 +537,8 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
               {isModelReady && useLiveAi && (
                 <div className="flex items-center gap-1 text-secondary">
                   <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-                  <span>AI: {lastInferenceTimeMs || 10}ms ({fps || 15} FPS)</span>
+                  <span className="font-bold text-primary">{activeEngine || 'YOLOv8'}</span>
+                  <span>: {lastInferenceTimeMs || 10}ms ({fps || 15} FPS)</span>
                 </div>
               )}
               <span className="hidden sm:inline text-white/50">|</span>

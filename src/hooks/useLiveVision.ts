@@ -25,6 +25,8 @@ export const useLiveVision = (
   const frameCountRef = useRef<number>(0);
   const lastFpsCheckRef = useRef<number>(performance.now());
 
+  const [activeEngine, setActiveEngine] = useState<'YOLOv8' | 'MobileNetV2'>('YOLOv8');
+
   // Load the model on mount
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +78,9 @@ export const useLiveVision = (
 
             if (results.length > 0) {
               setLastInferenceTimeMs(results[0].inferenceTimeMs);
+              if (results[0].engine) {
+                setActiveEngine(results[0].engine);
+              }
             }
 
             // Calculate real-time inference FPS
@@ -123,5 +128,6 @@ export const useLiveVision = (
     lastInferenceTimeMs,
     fps,
     isDemoRunning,
+    activeEngine,
   };
 };

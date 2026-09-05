@@ -39,7 +39,7 @@ export class YoloService {
     if (this.isLoading) return false;
 
     this.isLoading = true;
-    const defaultUrl = modelUrl || 'https://raw.githubusercontent.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.onnx';
+    const defaultUrl = modelUrl || '/models/yolov8n.onnx';
 
     try {
       this.session = await ort.InferenceSession.create(defaultUrl, {

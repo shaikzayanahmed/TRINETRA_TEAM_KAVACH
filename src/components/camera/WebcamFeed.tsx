@@ -19,7 +19,7 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
   const { isDetectionVisible, activeTarget, isFenceBreached, isRunning: isDemoRunning } = useDemo();
 
   // Run real-time browser-accelerated YOLO / COCO-SSD object detection
-  const { isModelReady, liveDetections, lastInferenceTimeMs, fps } = useLiveVision(videoRef, {
+  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !isDemoRunning,
     filterMode: 'ALL_OBJECTS',
   });
@@ -181,7 +181,9 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
         {isModelReady && hasPermission && (
           <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-mono text-[10px] text-secondary border border-secondary/40 shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-            <span>AI INFERENCE: {lastInferenceTimeMs || 8}ms ({fps || 15} FPS)</span>
+            <span className="font-bold text-primary">{activeEngine || 'YOLOv8'}</span>
+            <span className="text-outline">·</span>
+            <span>{lastInferenceTimeMs || 8}ms ({fps || 15} FPS)</span>
           </div>
         )}
       </div>
