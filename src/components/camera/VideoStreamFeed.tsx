@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useLiveVision } from '../../hooks/useLiveVision';
+import { DetectionFilterMode } from '../../services/visionAiService';
 import { DetectionOverlay } from './DetectionOverlay';
 
 interface VideoStreamFeedProps {
@@ -46,6 +47,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [spectralFilter, setSpectralFilter] = useState<SpectralFilter>('OPTICAL');
   const [useLiveAi, setUseLiveAi] = useState<boolean>(true);
+  const [filterMode, setFilterMode] = useState<DetectionFilterMode>('MOVING_VEHICLES');
   const [showVlcGuide, setShowVlcGuide] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -56,6 +58,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const { isModelReady, liveDetections, lastInferenceTimeMs, fps } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !!videoSrc && isPlaying,
     detectionIntervalMs: 60,
+    filterMode,
   });
 
   // Handle local video file upload
@@ -328,7 +331,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
 
       {/* Top Header HUD Bar (Over Video) */}
       {videoSrc && (
-        <div className="relative z-20 px-3 py-2 bg-gradient-to-b from-black/85 via-black/40 to-transparent flex items-center justify-between font-mono text-xs text-white">
+        <div className="relative z-20 px-3 py-2 bg-gradient-to-b from-black/90 via-black/50 to-transparent flex flex-wrap items-center justify-between gap-2 font-mono text-xs text-white">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
             <span className="font-bold uppercase tracking-wider text-secondary">
@@ -338,15 +341,65 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
             <span className="text-white/80 text-[11px] truncate max-w-[140px] sm:max-w-xs">
               {selectedFileName || 'CUSTOM STREAM'}
             </span>
-            {vehicleCount > 0 && (
-              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-secondary/30 text-secondary border border-secondary/50 text-[10px] font-bold animate-pulse">
-                <span className="material-symbols-outlined text-[12px]">directions_car</span>
-                <span>{vehicleCount} VEHICLE{vehicleCount > 1 ? 'S' : ''} DETECTED</span>
+
+            {/* Real-time Moving Vehicle / Clutter rejection status */}
+            {useLiveAi && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-secondary/20 text-secondary border border-secondary/50 text-[10px] font-bold">
+                <span className="material-symbols-outlined text-[12px] animate-pulse">directions_car</span>
+                <span>
+                  {filterMode === 'MOVING_VEHICLES'
+                    ? `${vehicleCount} MOVING CAR${vehicleCount !== 1 ? 'S' : ''} [NOISE FILTER ACTIVE]`
+                    : `${vehicleCount} VEHICLE${vehicleCount !== 1 ? 'S' : ''}`}
+                </span>
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Target Filter Mode Selector (Moving Cars vs All Vehicles vs All Targets) */}
+            {useLiveAi && (
+              <div className="flex items-center gap-0.5 bg-black/70 backdrop-blur rounded p-0.5 border border-white/20 text-[9px] font-mono">
+                <button
+                  onClick={() => setFilterMode('MOVING_VEHICLES')}
+                  title="Only Detect Moving Cars & Filter Out Clutter"
+                  className={`px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                    filterMode === 'MOVING_VEHICLES'
+                      ? 'bg-secondary text-black font-bold'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[11px]">motion_sensor_active</span>
+                  <span>MOVING CARS</span>
+                </button>
+
+                <button
+                  onClick={() => setFilterMode('ALL_VEHICLES')}
+                  title="Detect All Vehicles (Moving & Static)"
+                  className={`px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                    filterMode === 'ALL_VEHICLES'
+                      ? 'bg-secondary text-black font-bold'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[11px]">directions_car</span>
+                  <span>ALL VEHICLES</span>
+                </button>
+
+                <button
+                  onClick={() => setFilterMode('ALL_OBJECTS')}
+                  title="Detect All Recognized Objects"
+                  className={`px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                    filterMode === 'ALL_OBJECTS'
+                      ? 'bg-secondary text-black font-bold'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[11px]">grid_view</span>
+                  <span>ALL</span>
+                </button>
+              </div>
+            )}
+
             {/* Spectral Filter Switcher */}
             <div className="flex items-center gap-1 bg-black/60 backdrop-blur rounded p-0.5 border border-white/20 text-[10px]">
               {(['OPTICAL', 'FLIR_IRONBOW', 'WHITE_HOT', 'GREEN_NVG'] as const).map((filter) => (

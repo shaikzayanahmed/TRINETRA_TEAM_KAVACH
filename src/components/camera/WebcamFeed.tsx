@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useDemo } from '../../context/DemoContext';
 import { useLiveVision } from '../../hooks/useLiveVision';
+import { DetectionFilterMode } from '../../services/visionAiService';
 import { DetectionOverlay } from './DetectionOverlay';
 
 interface WebcamFeedProps {
@@ -15,12 +16,14 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
   const [errorState, setErrorState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [useLiveAi, setUseLiveAi] = useState<boolean>(true);
+  const [filterMode, setFilterMode] = useState<DetectionFilterMode>('MOVING_VEHICLES');
 
   const { isDetectionVisible, activeTarget, isFenceBreached, isRunning: isDemoRunning } = useDemo();
 
   // Run real-time browser-accelerated YOLO / COCO-SSD object detection
   const { isModelReady, liveDetections, lastInferenceTimeMs, fps } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !isDemoRunning,
+    filterMode,
   });
 
   const startWebcam = async () => {
@@ -186,7 +189,36 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
       </div>
 
       {/* Live AI Mode Switcher & Status Indicator */}
-      <div className="absolute top-2 right-2 flex items-center gap-1.5 font-mono text-[10px]">
+      <div className="absolute top-2 right-2 flex items-center gap-1.5 font-mono text-[10px] flex-wrap">
+        {useLiveAi && (
+          <div className="flex items-center gap-0.5 bg-black/70 backdrop-blur rounded p-0.5 border border-white/20 text-[9px]">
+            <button
+              onClick={() => setFilterMode('MOVING_VEHICLES')}
+              title="Detect Moving Cars Only & Reject Background Noise"
+              className={`px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                filterMode === 'MOVING_VEHICLES'
+                  ? 'bg-secondary text-black font-bold'
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[10px]">motion_sensor_active</span>
+              <span>MOVING CARS</span>
+            </button>
+            <button
+              onClick={() => setFilterMode('ALL_OBJECTS')}
+              title="Detect All Objects"
+              className={`px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                filterMode === 'ALL_OBJECTS'
+                  ? 'bg-secondary text-black font-bold'
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[10px]">grid_view</span>
+              <span>ALL</span>
+            </button>
+          </div>
+        )}
+
         <button
           onClick={() => setUseLiveAi((prev) => !prev)}
           title="Toggle Real-Time Neural Detection vs Scripted Demo"

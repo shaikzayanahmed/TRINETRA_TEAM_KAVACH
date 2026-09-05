@@ -37,6 +37,9 @@ export interface AnprRecord {
   securityClearance: 'AUTHORIZED' | 'SUSPICIOUS' | 'UNREGISTERED';
   flagReason?: string;
   plateCropUrl?: string;
+  speedKmh?: number;
+  motionStatus?: 'MOVING' | 'STATIONARY';
+  bearing?: string;
 }
 
 export interface Target {

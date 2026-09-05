@@ -27,49 +27,49 @@ export const EnvironmentalPage: React.FC = () => {
       case 'CLEAR':
         setEnv({
           ...env,
-          weather: 'Clear Sky (Nominal)',
+          weather: 'Clear',
           temperatureC: 18,
-          visibility: 'Optimal (> 12km)',
+          visibility: 'Good',
           windSpeedKmh: 8.4,
           aiDetectionCondition: 'NORMAL',
           rgbCameraCondition: 'GOOD',
-          lwirCameraCondition: 'STANDBY',
+          lwirCameraCondition: 'GOOD',
         });
         break;
       case 'BLIZZARD':
         setEnv({
           ...env,
-          weather: 'Sub-Zero Snow Blizzard',
+          weather: 'Snow',
           temperatureC: -14,
-          visibility: 'Degraded (< 400m)',
+          visibility: 'Poor',
           windSpeedKmh: 48.2,
-          aiDetectionCondition: 'HIGH-CONTRAST SNOW FILTER ACTIVE',
-          rgbCameraCondition: 'HEAVILY OBSTRUCTED',
-          lwirCameraCondition: 'CRITICAL (LWIR ACTIVE)',
+          aiDetectionCondition: 'ADAPTED',
+          rgbCameraCondition: 'OBSTRUCTED',
+          lwirCameraCondition: 'GOOD',
         });
         break;
       case 'DENSE_FOG':
         setEnv({
           ...env,
-          weather: 'Heavy Mountain Fog & Low Cloud',
+          weather: 'Fog',
           temperatureC: 4,
-          visibility: 'Poor (< 150m)',
+          visibility: 'Poor',
           windSpeedKmh: 12.0,
-          aiDetectionCondition: 'THERMAL SPECTRAL ENHANCED',
-          rgbCameraCondition: 'FOG PENETRATION FILTER',
-          lwirCameraCondition: 'OPTIMAL (THERMAL LOCK)',
+          aiDetectionCondition: 'ADAPTED',
+          rgbCameraCondition: 'OBSTRUCTED',
+          lwirCameraCondition: 'GOOD',
         });
         break;
       case 'HIGH_WINDS':
         setEnv({
           ...env,
-          weather: 'Dust Squall & Arid High Winds',
+          weather: 'Windy',
           temperatureC: 22,
-          visibility: 'Moderate (1.8km)',
+          visibility: 'Moderate',
           windSpeedKmh: 62.5,
-          aiDetectionCondition: 'VEGETATION WAVE FILTER ACTIVE',
-          rgbCameraCondition: 'SHAKE COMPENSATION ON',
-          lwirCameraCondition: 'NOMINAL',
+          aiDetectionCondition: 'DEGRADED',
+          rgbCameraCondition: 'FAIR',
+          lwirCameraCondition: 'GOOD',
         });
         break;
     }
