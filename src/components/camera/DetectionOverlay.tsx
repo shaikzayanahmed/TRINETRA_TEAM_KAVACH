@@ -26,7 +26,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   const breachState = liveDetection?.isTripwireBreach || isBreached;
   const classification = liveDetection?.class || target?.classification || 'PERSON';
   const confidence = liveDetection?.score || target?.confidence || 96.8;
-  const targetId = liveDetection?.id || target?.id || 'TGT-2048';
+  const targetId = liveDetection?.id || target?.id || 'TGT-H101';
   const anpr = liveDetection?.anpr || target?.anpr;
 
   const isVehicle = ['CAR', 'TRUCK', 'BUS', 'MOTORCYCLE', 'VEHICLE'].includes(classification.toUpperCase());
