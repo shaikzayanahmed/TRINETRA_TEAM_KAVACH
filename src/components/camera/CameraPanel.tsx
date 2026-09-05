@@ -19,10 +19,12 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
   isFullscreen = false,
   onToggleFullscreen,
 }) => {
-  const isRGB = camera.type === 'RGB';
+  // Bulletproof fallback in case camera is undefined
+  const safeCamera = camera || { type: 'RGB', status: 'OFFLINE', name: 'UNKNOWN', id: 'N/A', resolution: '1080P' };
+  const isRGB = safeCamera.type === 'RGB';
   const [isStreamMode, setIsStreamMode] = useState<boolean>(!isRGB); // Default non-RGB to active stream/selector mode so users can instantly feed video/VLC
 
-  const isOnline = isRGB ? camera.status === 'ONLINE' : isStreamMode;
+  const isOnline = isRGB ? safeCamera.status === 'ONLINE' : isStreamMode;
 
   const getFilterClass = () => {
     switch (opticalFilter) {

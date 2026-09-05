@@ -1,0 +1,162 @@
+# ══════════════════════════════════════════════════════════════
+# ANTIGRAVITY — Docker Compose
+# Edge-AI Surveillance & Tactical Threat Interception
+# ══════════════════════════════════════════════════════════════
+# Usage: docker compose up --build
+# ══════════════════════════════════════════════════════════════
+
+services:
+  # ── PostgreSQL + PostGIS ──
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: antigravity-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-antigravity}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-antigravity}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    container_name: antigravity-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── MinIO (S3-compatible Object Storage) ──
+  minio:
+    image: minio/minio:latest
+    container_name: antigravity-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Mosquitto MQTT Broker ──
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: antigravity-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./infrastructure/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI Backend ──
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: antigravity-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_SERVER: postgres
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MQTT_BROKER: mosquitto
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./sample_data:/app/sample_data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Edge Engine (AI Processing) ──
+  edge-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.edge
+    container_name: antigravity-edge
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MQTT_BROKER: mosquitto
+      MINIO_ENDPOINT: minio:9000
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    volumes:
+      - ./edge-engine:/app
+      - ./sample_data:/app/sample_data
+      - yolo_cache:/root/.cache
+
+  # ── React Frontend ──
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: antigravity-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api
+      VITE_WS_URL: ws://localhost:8000/ws/events
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./frontend/src:/app/src
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  mosquitto_data:
+  mosquitto_log:
+  yolo_cache:

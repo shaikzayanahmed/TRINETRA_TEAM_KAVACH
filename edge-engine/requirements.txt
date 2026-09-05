@@ -1,0 +1,26 @@
+# ANTIGRAVITY — Edge Engine Dependencies
+
+# ── Computer Vision ──
+opencv-python==4.13.0.92
+numpy>=1.26.0
+
+# ── Object Detection ──
+ultralytics>=8.1.0
+
+# ── Object Tracking (Kalman Filter) ──
+# (implemented natively with numpy — no extra dep needed)
+
+# ── Spatial Analysis ──
+shapely>=2.0.0
+
+# ── MQTT ──
+paho-mqtt>=2.0.0
+
+# ── MinIO / S3 ──
+minio>=7.2.0
+
+# ── HTTP Client (for backend API) ──
+requests>=2.31.0
+
+# ── Utilities ──
+python-dotenv>=1.0.1

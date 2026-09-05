@@ -1,0 +1,26 @@
+# ANTIGRAVITY - Edge Engine Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies for OpenCV, PostGIS client libs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgeos-dev \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY edge-engine/requirements.txt .
+RUN pip install --default-timeout=1000 --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY edge-engine/ .
+
+CMD ["python", "-m", "main", "--mode", "simulation"]
