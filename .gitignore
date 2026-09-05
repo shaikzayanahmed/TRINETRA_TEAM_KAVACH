@@ -23,3 +23,8 @@ Thumbs.db
 dist/
 build/
 .cache/
+__pycache__/
+*.py[cod]
+*$py.class
+backend/storage/
+

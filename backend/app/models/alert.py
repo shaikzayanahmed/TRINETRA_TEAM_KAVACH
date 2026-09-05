@@ -2,12 +2,12 @@ import uuid
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String, Float, Enum, ForeignKey, DateTime
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import String, Float, Enum, ForeignKey, DateTime, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from geoalchemy2 import Geometry
 
 from app.db.base import Base
+from app.models.geo_types import GeoPoint
 import enum
 
 
@@ -17,6 +17,11 @@ class AlertType(str, enum.Enum):
     ZONE_EXIT = "ZONE_EXIT"
     SUSPICIOUS_MOVEMENT = "SUSPICIOUS_MOVEMENT"
     CAMERA_OFFLINE = "CAMERA_OFFLINE"
+    ANPR_FLAGGED = "ANPR_FLAGGED"
+    WEAPON_DETECTED = "WEAPON_DETECTED"
+    PERSON_DETECTED = "PERSON_DETECTED"
+    VEHICLE_DETECTED = "VEHICLE_DETECTED"
+
 
 
 class AlertSeverity(str, enum.Enum):
@@ -53,11 +58,11 @@ class Alert(Base):
     confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     
     # Geospatial location of the event
-    location = mapped_column(Geometry("POINT", srid=4326), nullable=True)
+    location = mapped_column(GeoPoint, nullable=True)
     
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     
-    metadata_json = mapped_column(JSONB, nullable=True)
+    metadata_json = mapped_column(JSON, nullable=True)
     
     evidence_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

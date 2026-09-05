@@ -7,6 +7,15 @@ from pydantic import BaseModel, Field
 
 # ── Detection ──
 
+class DetectionCreate(BaseModel):
+    camera_id: Optional[str] = None
+    track_id: Optional[str] = None
+    object_class: str
+    confidence: float
+    bounding_box: Any
+    timestamp: Optional[str] = None
+
+
 class DetectionResponse(BaseModel):
     id: str
     camera_id: str
@@ -38,16 +47,17 @@ class TrackResponse(BaseModel):
 # ── Alert ──
 
 class AlertCreate(BaseModel):
-    """Used internally by the MQTT worker to create alerts from edge events."""
-    camera_id: str
+    """Used to create alerts from edge/browser events."""
+    camera_id: Optional[str] = None
     track_id: Optional[str] = None
-    alert_type: str
-    severity: str
+    alert_type: str = "TRIPWIRE_BREACH"
+    severity: Optional[str] = "HIGH"
     confidence: Optional[float] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    timestamp: str
+    timestamp: Optional[str] = None
     metadata: Optional[dict] = None
+    metadata_json: Optional[dict] = None
     evidence_path: Optional[str] = None
     hash: Optional[str] = None
 
@@ -81,9 +91,26 @@ class AlertVerifyResponse(BaseModel):
 
 # ── Evidence ──
 
+class EvidenceCreate(BaseModel):
+    alert_id: Optional[str] = None
+    camera_id: Optional[str] = None
+    target_id: Optional[str] = None
+    object_path: Optional[str] = None
+    thumbnail_data: Optional[str] = None  # Base64 or URL
+    media_type: str = "image/jpeg"
+    sha256: Optional[str] = None
+    confidence: Optional[float] = None
+    plate_number: Optional[str] = None
+    vehicle_color: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    location: Optional[str] = None
+    sector: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
 class EvidenceResponse(BaseModel):
     id: str
-    alert_id: str
+    alert_id: Optional[str] = None
     object_path: str
     media_type: str
     sha256: str
@@ -92,6 +119,7 @@ class EvidenceResponse(BaseModel):
     presigned_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
 
 
 # ── System ──

@@ -2,12 +2,12 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Float, ForeignKey, DateTime
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import String, Float, ForeignKey, DateTime, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from geoalchemy2 import Geometry
 
 from app.db.base import Base
+from app.models.geo_types import GeoPoint
 
 
 class Detection(Base):
@@ -25,10 +25,10 @@ class Detection(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     
     # Stores [x1, y1, x2, y2]
-    bounding_box = mapped_column(JSONB, nullable=False)
+    bounding_box = mapped_column(JSON, nullable=False)
     
     # Geospatial location in the scene
-    centroid = mapped_column(Geometry("POINT", srid=4326), nullable=True)
+    centroid = mapped_column(GeoPoint, nullable=True)
     
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
 

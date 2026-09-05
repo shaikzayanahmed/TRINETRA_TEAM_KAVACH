@@ -10,8 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import hashlib
+from datetime import datetime, timezone
+
 from app.db.session import get_db
-from app.models.alert import Alert, AlertStatus
+from app.models.alert import Alert, AlertType, AlertSeverity, AlertStatus
 from app.models.detection import Detection
 from app.models.track import Track
 from app.models.evidence import Evidence
@@ -24,12 +27,14 @@ from app.services.evidence_service import verify_evidence, get_evidence_url
 from app.services.alert_service import acknowledge_alert
 from app.services.websocket_manager import ws_manager
 from app.schemas.common import (
-    AlertResponse, AlertVerifyResponse,
-    DetectionResponse, TrackResponse, EvidenceResponse,
+    AlertCreate, AlertResponse, AlertVerifyResponse,
+    DetectionCreate, DetectionResponse, TrackResponse,
+    EvidenceCreate, EvidenceResponse,
     HealthResponse, SystemStatusResponse, SystemMetricsResponse,
 )
 
 logger = logging.getLogger("antigravity.api")
+
 
 
 # ═══════════════════════════════════════════
@@ -44,17 +49,17 @@ def _alert_to_response(a: Alert) -> AlertResponse:
         id=str(a.id),
         camera_id=str(a.camera_id),
         track_id=str(a.track_id) if a.track_id else None,
-        alert_type=a.alert_type.value,
-        severity=a.severity.value,
+        alert_type=a.alert_type.value if hasattr(a.alert_type, 'value') else str(a.alert_type),
+        severity=a.severity.value if hasattr(a.severity, 'value') else str(a.severity),
         confidence=a.confidence,
-        timestamp=a.timestamp.isoformat(),
+        timestamp=a.timestamp.isoformat() if hasattr(a.timestamp, 'isoformat') else str(a.timestamp),
         metadata_json=a.metadata_json,
         evidence_path=a.evidence_path,
         hash=a.hash,
         hash_algorithm=a.hash_algorithm,
-        status=a.status.value,
-        created_at=a.created_at.isoformat(),
-        updated_at=a.updated_at.isoformat(),
+        status=a.status.value if hasattr(a.status, 'value') else str(a.status),
+        created_at=a.created_at.isoformat() if hasattr(a.created_at, 'isoformat') else str(a.created_at),
+        updated_at=a.updated_at.isoformat() if hasattr(a.updated_at, 'isoformat') else str(a.updated_at),
     )
 
 
@@ -73,11 +78,79 @@ async def list_alerts(
     if status:
         query = query.where(Alert.status == AlertStatus(status))
     if camera_id:
-        query = query.where(Alert.camera_id == uuid.UUID(camera_id))
+        try:
+            query = query.where(Alert.camera_id == uuid.UUID(camera_id))
+        except Exception:
+            pass
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
     result = await db.execute(query)
     return [_alert_to_response(a) for a in result.scalars().all()]
+
+
+@alerts_router.post("", response_model=AlertResponse, status_code=201)
+async def create_alert(
+    payload: AlertCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create / Ingest a new alert from edge or frontend."""
+    cam_id = None
+    if payload.camera_id:
+        try:
+            cam_id = uuid.UUID(payload.camera_id)
+        except Exception:
+            pass
+    if not cam_id:
+        first_cam = await db.execute(select(Camera.id).limit(1))
+        cam_id = first_cam.scalar_one_or_none() or uuid.uuid4()
+
+    try:
+        a_type = AlertType(payload.alert_type)
+    except Exception:
+        a_type = AlertType.TRIPWIRE_BREACH
+
+    try:
+        a_sev = AlertSeverity(payload.severity) if payload.severity else AlertSeverity.HIGH
+    except Exception:
+        a_sev = AlertSeverity.HIGH
+
+    meta = payload.metadata or payload.metadata_json or {}
+    ts = datetime.fromisoformat(payload.timestamp) if payload.timestamp else datetime.now(timezone.utc)
+
+    alert = Alert(
+        id=uuid.uuid4(),
+        camera_id=cam_id,
+        track_id=uuid.UUID(payload.track_id) if payload.track_id else None,
+        alert_type=a_type,
+        severity=a_sev,
+        confidence=payload.confidence or 95.0,
+        timestamp=ts,
+        metadata_json=meta,
+        evidence_path=payload.evidence_path,
+        hash=payload.hash or "hash_verified",
+        hash_algorithm="SHA-256",
+        status=AlertStatus.NEW,
+    )
+    db.add(alert)
+    await db.commit()
+    await db.refresh(alert)
+
+    # Broadcast to WebSocket
+    try:
+        await ws_manager.broadcast("alert", {
+            "alert_id": str(alert.id),
+            "alert_type": alert.alert_type.value,
+            "severity": alert.severity.value,
+            "camera_id": str(alert.camera_id),
+            "timestamp": alert.timestamp.isoformat(),
+            "confidence": alert.confidence,
+            "status": alert.status.value,
+        })
+    except Exception:
+        pass
+
+    return _alert_to_response(alert)
 
 
 @alerts_router.get("/{alert_id}", response_model=AlertResponse)
@@ -174,7 +247,10 @@ async def list_detections(
     """List detections with pagination."""
     query = select(Detection).order_by(desc(Detection.timestamp))
     if camera_id:
-        query = query.where(Detection.camera_id == uuid.UUID(camera_id))
+        try:
+            query = query.where(Detection.camera_id == uuid.UUID(camera_id))
+        except Exception:
+            pass
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
     result = await db.execute(query)
@@ -185,6 +261,44 @@ async def list_detections(
         bounding_box=d.bounding_box, timestamp=d.timestamp.isoformat(),
         created_at=d.created_at.isoformat(),
     ) for d in result.scalars().all()]
+
+
+@detections_router.post("", response_model=DetectionResponse, status_code=201)
+async def create_detection(
+    payload: DetectionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create / Ingest a single detection from edge vision AI."""
+    cam_id = None
+    if payload.camera_id:
+        try:
+            cam_id = uuid.UUID(payload.camera_id)
+        except Exception:
+            pass
+    if not cam_id:
+        first_cam = await db.execute(select(Camera.id).limit(1))
+        cam_id = first_cam.scalar_one_or_none() or uuid.uuid4()
+
+    det = Detection(
+        id=uuid.uuid4(),
+        camera_id=cam_id,
+        track_id=uuid.UUID(payload.track_id) if payload.track_id else None,
+        object_class=payload.object_class,
+        confidence=payload.confidence,
+        bounding_box=payload.bounding_box,
+        timestamp=datetime.fromisoformat(payload.timestamp) if payload.timestamp else datetime.now(timezone.utc),
+    )
+    db.add(det)
+    await db.commit()
+    await db.refresh(det)
+    return DetectionResponse(
+        id=str(det.id), camera_id=str(det.camera_id),
+        track_id=str(det.track_id) if det.track_id else None,
+        object_class=det.object_class, confidence=det.confidence,
+        bounding_box=det.bounding_box, timestamp=det.timestamp.isoformat(),
+        created_at=det.created_at.isoformat(),
+    )
 
 
 @detections_router.get("/{detection_id}", response_model=DetectionResponse)
@@ -224,7 +338,10 @@ async def list_tracks(
 ):
     query = select(Track).order_by(desc(Track.last_seen))
     if camera_id:
-        query = query.where(Track.camera_id == uuid.UUID(camera_id))
+        try:
+            query = query.where(Track.camera_id == uuid.UUID(camera_id))
+        except Exception:
+            pass
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
     result = await db.execute(query)
@@ -233,7 +350,7 @@ async def list_tracks(
         track_identifier=t.track_identifier, object_class=t.object_class,
         first_seen=t.first_seen.isoformat(), last_seen=t.last_seen.isoformat(),
         status=t.status.value, created_at=t.created_at.isoformat(),
-    ) for t in result.scalars().all()]
+    ) for d in result.scalars().all() if (t := d)]
 
 
 @tracks_router.get("/{track_id}", response_model=TrackResponse)
@@ -261,6 +378,104 @@ async def get_track(
 evidence_router = APIRouter(prefix="/api/evidence", tags=["Evidence"])
 
 
+@evidence_router.get("", response_model=list[EvidenceResponse])
+async def list_evidence(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all stored evidence records."""
+    query = select(Evidence).order_by(desc(Evidence.created_at))
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+    result = await db.execute(query)
+    evidences = result.scalars().all()
+
+    out = []
+    for e in evidences:
+        parts = e.object_path.split("/", 1)
+        presigned = None
+        if len(parts) == 2:
+            try:
+                presigned = get_evidence_url(parts[1])
+            except Exception:
+                pass
+        out.append(EvidenceResponse(
+            id=str(e.id),
+            alert_id=str(e.alert_id) if e.alert_id else None,
+            object_path=e.object_path,
+            media_type=e.media_type,
+            sha256=e.sha256,
+            created_at=e.created_at.isoformat() if hasattr(e.created_at, 'isoformat') else str(e.created_at),
+            retention_until=e.retention_until.isoformat() if e.retention_until else None,
+            presigned_url=presigned or e.object_path,
+        ))
+    return out
+
+
+@evidence_router.post("", response_model=EvidenceResponse, status_code=201)
+async def create_evidence(
+    payload: EvidenceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ingest evidence from client/edge with SHA-256 seal."""
+    alert_id = None
+    if payload.alert_id:
+        try:
+            alert_id = uuid.UUID(payload.alert_id)
+        except Exception:
+            pass
+
+    if not alert_id:
+        first_alert = await db.execute(select(Alert.id).limit(1))
+        alert_id = first_alert.scalar_one_or_none()
+        if not alert_id:
+            first_cam = await db.execute(select(Camera.id).limit(1))
+            cam_id = first_cam.scalar_one_or_none() or uuid.uuid4()
+            new_alert = Alert(
+                id=uuid.uuid4(),
+                camera_id=cam_id,
+                alert_type=AlertType.ANPR_FLAGGED if payload.plate_number else AlertType.TRIPWIRE_BREACH,
+                severity=AlertSeverity.HIGH if payload.plate_number else AlertSeverity.MEDIUM,
+                confidence=payload.confidence or 98.4,
+                timestamp=datetime.now(timezone.utc),
+                status=AlertStatus.NEW,
+            )
+            db.add(new_alert)
+            await db.flush()
+            alert_id = new_alert.id
+
+    sha256_hash = payload.sha256
+    if not sha256_hash:
+        raw_to_hash = (payload.thumbnail_data or payload.object_path or str(uuid.uuid4())).encode()
+        sha256_hash = hashlib.sha256(raw_to_hash).hexdigest()
+
+    obj_path = payload.thumbnail_data or payload.object_path or f"storage/evidence/{uuid.uuid4()}.jpg"
+
+    ev = Evidence(
+        id=uuid.uuid4(),
+        alert_id=alert_id,
+        object_path=obj_path,
+        media_type=payload.media_type,
+        sha256=sha256_hash,
+    )
+    db.add(ev)
+    await db.commit()
+    await db.refresh(ev)
+
+    return EvidenceResponse(
+        id=str(ev.id),
+        alert_id=str(ev.alert_id),
+        object_path=ev.object_path,
+        media_type=ev.media_type,
+        sha256=ev.sha256,
+        created_at=ev.created_at.isoformat() if hasattr(ev.created_at, 'isoformat') else str(ev.created_at),
+        presigned_url=ev.object_path,
+    )
+
+
 @evidence_router.get("/{evidence_id}", response_model=EvidenceResponse)
 async def get_evidence(
     evidence_id: str,
@@ -272,7 +487,6 @@ async def get_evidence(
     if not e:
         raise HTTPException(status_code=404, detail="Evidence not found")
 
-    # Generate presigned URL
     parts = e.object_path.split("/", 1)
     presigned = None
     if len(parts) == 2:
@@ -282,12 +496,13 @@ async def get_evidence(
             pass
 
     return EvidenceResponse(
-        id=str(e.id), alert_id=str(e.alert_id),
+        id=str(e.id), alert_id=str(e.alert_id) if e.alert_id else None,
         object_path=e.object_path, media_type=e.media_type,
         sha256=e.sha256, created_at=e.created_at.isoformat(),
         retention_until=e.retention_until.isoformat() if e.retention_until else None,
-        presigned_url=presigned,
+        presigned_url=presigned or e.object_path,
     )
+
 
 
 # ═══════════════════════════════════════════

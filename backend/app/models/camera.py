@@ -4,9 +4,9 @@ from typing import List
 from sqlalchemy import String, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from geoalchemy2 import Geometry
 
 from app.db.base import Base
+from app.models.geo_types import GeoPoint
 import enum
 
 
@@ -34,8 +34,8 @@ class Camera(Base):
     )
     source_url: Mapped[str] = mapped_column(String(500), nullable=False)
     
-    # Geographic location using PostGIS Point (longitude, latitude)
-    location = mapped_column(Geometry("POINT", srid=4326), nullable=True)
+    # Geographic location using PostGIS Point or string coordinates
+    location = mapped_column(GeoPoint, nullable=True)
 
     status: Mapped[CameraStatus] = mapped_column(
         Enum(CameraStatus, name="camera_status", create_type=True), nullable=False, default=CameraStatus.OFFLINE

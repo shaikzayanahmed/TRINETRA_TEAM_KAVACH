@@ -4,9 +4,9 @@ from typing import Optional
 from sqlalchemy import String, Enum, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from geoalchemy2 import Geometry
 
 from app.db.base import Base
+from app.models.geo_types import GeoGeometry
 import enum
 
 
@@ -25,9 +25,8 @@ class Zone(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     
-    # Geometry for the zone. Can be a polygon or linestring. 
-    # GEOMETRY type without specifying POINT/POLYGON allows flexibility.
-    geometry = mapped_column(Geometry("GEOMETRY", srid=4326), nullable=False)
+    # Geometry for the zone (polygon or linestring)
+    geometry = mapped_column(GeoGeometry, nullable=False)
     
     zone_type: Mapped[ZoneType] = mapped_column(
         Enum(ZoneType, name="zone_type", create_type=True), nullable=False

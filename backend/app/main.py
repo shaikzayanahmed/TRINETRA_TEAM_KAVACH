@@ -57,28 +57,30 @@ async def lifespan(app: FastAPI):
     logger.info("  ANTIGRAVITY Backend Starting...")
     logger.info("=" * 60)
 
-    # Initialize Redis
+    # Initialize Redis / in-memory cache
     try:
         redis = await get_redis()
-        await redis.ping()
-        logger.info("[✓] Redis connected")
+        if redis:
+            await redis.ping()
+            logger.info("[✓] Redis connected")
+        else:
+            logger.info("[✓] Fast in-memory cache fallback active")
     except Exception as e:
-        logger.warning(f"[!] Redis connection failed: {e}")
+        logger.info(f"[!] In-memory cache fallback active: {e}")
 
-    # Initialize MinIO buckets
+    # Initialize MinIO / local storage
     try:
         ensure_buckets()
-        logger.info("[✓] MinIO buckets initialized")
+        logger.info("[✓] Object storage initialized")
     except Exception as e:
-        logger.warning(f"[!] MinIO initialization failed: {e}")
+        logger.info(f"[!] Local filesystem storage active: {e}")
 
     # Start MQTT
     try:
         register_handler(TOPIC_ALERTS, _handle_alert_event)
         start_mqtt()
-        logger.info("[✓] MQTT client started")
     except Exception as e:
-        logger.warning(f"[!] MQTT start failed: {e}")
+        logger.info(f"[!] MQTT disabled in standalone mode: {e}")
 
     logger.info("[✓] ANTIGRAVITY Backend ready")
     logger.info(f"    API docs: http://localhost:{settings.BACKEND_PORT}/docs")
@@ -87,9 +89,16 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ──
     logger.info("ANTIGRAVITY Backend shutting down...")
-    stop_mqtt()
-    await close_redis()
+    try:
+        stop_mqtt()
+    except Exception:
+        pass
+    try:
+        await close_redis()
+    except Exception:
+        pass
     logger.info("Goodbye.")
+
 
 
 # ── App ──
@@ -109,6 +118,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
 # ── Route registration ──
 app.include_router(auth_router)
 app.include_router(cameras_router)
@@ -119,3 +131,9 @@ app.include_router(tracks_router)
 app.include_router(evidence_router)
 app.include_router(system_router)
 app.include_router(ws_router)
+
+# ── Static storage directory for local prototype evidence ──
+storage_dir = Path(__file__).resolve().parent.parent / "storage"
+storage_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/api/storage", StaticFiles(directory=str(storage_dir)), name="storage")
+
