@@ -1,14 +1,39 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from '../components/common/Header';
 import { Sidebar } from '../components/common/Sidebar';
 import { DemoBanner } from '../components/common/DemoBanner';
+import { AiCommandPalette } from '../components/common/AiCommandPalette';
 
 export const MainLayout: React.FC = () => {
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Toggle palette on Ctrl+K or Cmd+K
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+
+    const handleCustomOpen = () => {
+      setIsCommandPaletteOpen(true);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('open-ai-command-palette', handleCustomOpen);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('open-ai-command-palette', handleCustomOpen);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-surface text-on-surface flex flex-col font-body">
-      {/* Pinned Tactical Top Header */}
-      <Header />
+      {/* Pinned Tactical Top Header with AI Command Launcher */}
+      <Header onOpenCommandPalette={() => setIsCommandPaletteOpen(true)} />
 
       {/* Main Container */}
       <div className="pt-12 flex-1 flex flex-col">
@@ -25,6 +50,12 @@ export const MainLayout: React.FC = () => {
           </main>
         </div>
       </div>
+
+      {/* Tactical AI Command Palette Modal */}
+      <AiCommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
 
       {/* Tactical Footer */}
       <footer className="w-full bg-surface-container-lowest border-t border-surface-container-high/60 py-2.5 px-4 lg:px-6 select-none font-mono text-[11px] text-on-surface-variant flex flex-col sm:flex-row items-center justify-between gap-2 shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">

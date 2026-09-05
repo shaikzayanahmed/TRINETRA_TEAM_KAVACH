@@ -2,10 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useDemo } from '../../context/DemoContext';
 
-export const Header: React.FC = () => {
+export interface HeaderProps {
+  onOpenCommandPalette?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onOpenCommandPalette }) => {
   const { user } = useAuth();
   const { isFenceBreached } = useDemo();
   const [timeString, setTimeString] = useState<string>('');
+
+  const handleOpenPalette = () => {
+    if (onOpenCommandPalette) {
+      onOpenCommandPalette();
+    } else {
+      window.dispatchEvent(new CustomEvent('open-ai-command-palette'));
+    }
+  };
 
   useEffect(() => {
     const updateTime = () => {
@@ -44,8 +56,33 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
+      {/* Center AI Command Palette Launcher */}
+      <button
+        onClick={handleOpenPalette}
+        className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-primary/30 text-outline hover:text-on-surface shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] hover:border-primary/60 transition-all group"
+      >
+        <span className="material-symbols-outlined text-[16px] text-primary group-hover:scale-110 transition-transform">
+          terminal
+        </span>
+        <span className="text-[11px] font-mono text-on-surface-variant group-hover:text-on-surface">
+          AI Command Prompt...
+        </span>
+        <kbd className="px-1.5 py-0.5 rounded bg-surface-container-lowest border border-surface-container-highest text-[10px] text-primary font-mono font-bold">
+          Ctrl+K
+        </kbd>
+      </button>
+
       {/* Telemetry Status Bar */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px]">
+        {/* Mobile Command Launcher Button */}
+        <button
+          onClick={handleOpenPalette}
+          className="flex md:hidden p-1.5 rounded-lg bg-surface-container border border-primary/30 text-primary"
+          title="Open AI Command Prompt"
+        >
+          <span className="material-symbols-outlined text-[18px]">terminal</span>
+        </button>
+
         <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)]">
           <span className="text-outline">SYSTEM:</span>
           <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
