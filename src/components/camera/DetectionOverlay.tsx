@@ -56,8 +56,12 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
 
   const isSuspiciousStill = liveDetection?.isSuspiciousStill || false;
   const stillDurationSeconds = liveDetection?.stillDurationSeconds || 0;
-
-  const isAnalyzed = Boolean(anpr?.isAnalyzed && anpr?.plateNumber);
+  const isAnalyzed = Boolean(
+    anpr?.isAnalyzed &&
+    anpr?.plateNumber &&
+    anpr.plateNumber !== 'ANALYZING...' &&
+    anpr.plateNumber !== 'ACQUIRING...'
+  );
 
   return (
     <div
