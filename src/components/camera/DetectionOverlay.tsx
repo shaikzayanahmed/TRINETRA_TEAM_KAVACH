@@ -69,7 +69,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
         width: `${bbox.width}%`,
         height: `${bbox.height}%`,
       }}
-      className={`absolute border-2 rounded transition-all duration-75 pointer-events-none ${borderColor}`}
+      className={`absolute border-2 rounded pointer-events-none will-change-[left,top,width,height] ${borderColor}`}
     >
       {/* ========================================================================= */}
       {/* CROPPED NUMBER PLATE & TACTICAL ANPR CARD DISPLAYED DIRECTLY ABOVE THE CAR */}

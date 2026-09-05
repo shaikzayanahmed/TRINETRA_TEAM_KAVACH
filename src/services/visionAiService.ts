@@ -69,8 +69,8 @@ class VisionAiService {
   // Offscreen fast inference canvas to prevent 1080p/4K GPU texture transfer lag
   private inferenceCanvas: HTMLCanvasElement | null = null;
   private inferenceCtx: CanvasRenderingContext2D | null = null;
-  private readonly INFERENCE_WIDTH = 384;
-  private readonly INFERENCE_HEIGHT = 288;
+  private readonly INFERENCE_WIDTH = 512;
+  private readonly INFERENCE_HEIGHT = 384;
 
   // Multi-Object Spatial Centroid Tracker State
   private activeTracks: Map<string, ActiveTrack> = new Map();
@@ -98,9 +98,9 @@ class VisionAiService {
 
       await tf.ready();
 
-      // Load quantized MobileNetV2 for ultra-fast edge inference (< 10ms per frame)
+      // Load full high-precision MobileNetV2 for superior accuracy & tighter bounding boxes
       this.model = await cocoSsd.load({
-        base: 'lite_mobilenet_v2',
+        base: 'mobilenet_v2',
       });
 
       // Initialize offscreen canvas
@@ -142,7 +142,7 @@ class VisionAiService {
   /**
    * Assign or match persistent tracking IDs using spatial centroid proximity,
    * calculates motion displacement vectors, velocity, still duration, and only triggers ANPR
-   * for moving vehicles or suspicious prolonged stationary vehicles.
+   * for moving vehicles with EMA coordinate smoothing.
    */
   private matchOrCreateTrack(
     className: string,
@@ -163,6 +163,7 @@ class VisionAiService {
     stillDurationSeconds: number;
     speedKmh: number;
     bearingLabel: string;
+    smoothedBbox: { x: number; y: number; width: number; height: number };
   } {
     const cx = normX + normW / 2;
     const cy = normY + normH / 2;
@@ -190,18 +191,25 @@ class VisionAiService {
     }
 
     if (bestTrackId && this.activeTracks.has(bestTrackId)) {
-      // Update existing persistent track
+      // Update existing persistent track with EMA coordinate smoothing (Alpha = 0.70)
       const existing = this.activeTracks.get(bestTrackId)!;
-      existing.history.push({ cx, cy, time: now });
+      const alpha = 0.70;
+
+      const smoothedCx = alpha * cx + (1 - alpha) * existing.cx;
+      const smoothedCy = alpha * cy + (1 - alpha) * existing.cy;
+      const smoothedW = alpha * normW + (1 - alpha) * existing.width;
+      const smoothedH = alpha * normH + (1 - alpha) * existing.height;
+
+      existing.history.push({ cx: smoothedCx, cy: smoothedCy, time: now });
       if (existing.history.length > 10) {
         existing.history.shift();
       }
 
       existing.frameSeenCount += 1;
-      existing.cx = cx;
-      existing.cy = cy;
-      existing.width = normW;
-      existing.height = normH;
+      existing.cx = smoothedCx;
+      existing.cy = smoothedCy;
+      existing.width = smoothedW;
+      existing.height = smoothedH;
       existing.score = score;
       existing.lastSeenMs = now;
 
@@ -212,17 +220,17 @@ class VisionAiService {
 
       if (existing.history.length >= 2) {
         const oldest = existing.history[0];
-        const dx = cx - oldest.cx;
-        const dy = cy - oldest.cy;
+        const dx = smoothedCx - oldest.cx;
+        const dy = smoothedCy - oldest.cy;
         const totalDisplacement = Math.hypot(dx, dy);
         const timeDeltaSec = Math.max(0.04, (now - oldest.time) / 1000);
         const velocityPctPerSec = totalDisplacement / timeDeltaSec;
 
-        // Motion threshold: displacement >= 0.35% of frame or velocity >= 0.30%/s
-        isMoving = totalDisplacement >= 0.35 || velocityPctPerSec >= 0.30;
+        // Motion threshold
+        isMoving = totalDisplacement >= 0.30 || velocityPctPerSec >= 0.25;
 
         if (isMoving) {
-          speedKmh = Math.min(110, Math.max(22, Math.round(velocityPctPerSec * 6.5 + 28)));
+          speedKmh = Math.min(110, Math.max(24, Math.round(velocityPctPerSec * 6.5 + 28)));
           bearingLabel = this.calculateHeading(dx, dy);
           existing.stationarySinceMs = null;
         } else {
@@ -231,20 +239,17 @@ class VisionAiService {
           }
         }
       } else {
-        // Initial detection phase: assume moving if newly entering frame
         isMoving = true;
         speedKmh = 48;
         bearingLabel = 'TRACKING...';
         existing.stationarySinceMs = null;
       }
 
-      // Check still / loitering duration
       let stillDurationSeconds = 0;
       let isSuspiciousStill = false;
       if (!isMoving && existing.stationarySinceMs) {
         const stillMs = now - existing.stationarySinceMs;
         stillDurationSeconds = Math.round(stillMs / 100) / 10;
-        // If vehicle has been still for >= 2.0 seconds in the perimeter or is flagged, mark as suspicious still
         isSuspiciousStill = stillMs >= 2000;
       }
 
@@ -266,9 +271,11 @@ class VisionAiService {
 
         existing.anpr = anprRecord;
       } else {
-        // Non-moving / static car: clear ANPR plate so it doesn't clutter the screen or UI
         existing.anpr = undefined;
       }
+
+      const smoothedX = Math.max(0, smoothedCx - smoothedW / 2);
+      const smoothedY = Math.max(0, smoothedCy - smoothedH / 2);
 
       return {
         id: existing.id,
@@ -279,6 +286,12 @@ class VisionAiService {
         stillDurationSeconds,
         speedKmh,
         bearingLabel,
+        smoothedBbox: {
+          x: smoothedX,
+          y: smoothedY,
+          width: smoothedW,
+          height: smoothedH,
+        },
       };
     }
 
@@ -331,6 +344,12 @@ class VisionAiService {
       stillDurationSeconds: 0,
       speedKmh: newTrack.speedKmh,
       bearingLabel: newTrack.bearingLabel,
+      smoothedBbox: {
+        x: Math.max(0, normX),
+        y: Math.max(0, normY),
+        width: normW,
+        height: normH,
+      },
     };
   }
 
@@ -390,8 +409,7 @@ class VisionAiService {
         const upperClass = pred.class.toUpperCase();
         const isVehicle = VEHICLE_CLASSES.has(upperClass);
 
-        // Clutter Rejection Filter:
-        // If in 'MOVING_VEHICLES' or 'ALL_VEHICLES' mode, reject non-vehicle classes (e.g. cups, chairs, cellphones)
+        // Clutter Rejection Filter
         if ((filterMode === 'MOVING_VEHICLES' || filterMode === 'ALL_VEHICLES') && !isVehicle) {
           continue;
         }
@@ -419,7 +437,7 @@ class VisionAiService {
           (normH / 100) * videoHeight,
         ];
 
-        // Assign persistent unique tracking ID for each human and vehicle with velocity & still analysis
+        // Assign persistent unique tracking ID with EMA smoothing
         const {
           id: targetId,
           anpr,
@@ -428,6 +446,7 @@ class VisionAiService {
           stillDurationSeconds,
           speedKmh,
           bearingLabel,
+          smoothedBbox,
         } = this.matchOrCreateTrack(
           pred.class,
           normX,
@@ -440,8 +459,6 @@ class VisionAiService {
           videoElement
         );
 
-        // If MOVING_VEHICLES filter is active:
-        // Only include moving vehicles OR suspicious long-time still vehicles, rejecting neutral static clutter!
         if (filterMode === 'MOVING_VEHICLES' && (!isVehicle || (!isMoving && !isSuspiciousStill))) {
           continue;
         }
@@ -451,10 +468,10 @@ class VisionAiService {
           class: upperClass,
           score,
           bbox: {
-            x: normX,
-            y: normY,
-            width: normW,
-            height: normH,
+            x: Math.round(smoothedBbox.x * 100) / 100,
+            y: Math.round(smoothedBbox.y * 100) / 100,
+            width: Math.round(smoothedBbox.width * 100) / 100,
+            height: Math.round(smoothedBbox.height * 100) / 100,
             raw: videoRawBbox,
           },
           isTripwireBreach,
