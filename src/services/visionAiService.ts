@@ -81,32 +81,34 @@ class VisionAiService {
   private nextEntityId: number = 301;
 
   async loadModel(): Promise<boolean> {
-    if (this.isReady && (this.model || yoloService.isModelLoaded())) return true;
+    if (this.isReady && (yoloService.isModelLoaded() || this.model)) return true;
     if (this.isLoading) return false;
 
     this.isLoading = true;
     try {
-      // Start YOLOv8 ONNX loading in parallel
-      yoloService.loadYoloModel().catch((e) => console.warn('YOLO loader background notice:', e));
+      // 1. Explicitly await YOLOv8 ONNX model load first as the primary engine
+      const yoloReady = await yoloService.loadYoloModel();
+      console.log(`[VisionAI] YOLOv8 engine status: ${yoloReady ? 'READY (PRIMARY)' : 'FALLBACK'}`);
 
-      // Enable high-performance WebGL backend for GPU acceleration
-      if (tf.getBackend() !== 'webgl') {
-        try {
-          await tf.setBackend('webgl');
-          tf.env().set('WEBGL_PACK', true);
-          tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
-          tf.env().set('WEBGL_CPU_FORWARD', false);
-        } catch {
-          // Auto fallback
+      // 2. If YOLOv8 could not be loaded, initialize MobileNet fallback
+      if (!yoloReady) {
+        if (tf.getBackend() !== 'webgl') {
+          try {
+            await tf.setBackend('webgl');
+            tf.env().set('WEBGL_PACK', true);
+            tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
+            tf.env().set('WEBGL_CPU_FORWARD', false);
+          } catch {
+            // Auto fallback
+          }
         }
+
+        await tf.ready();
+
+        this.model = await cocoSsd.load({
+          base: 'mobilenet_v2',
+        });
       }
-
-      await tf.ready();
-
-      // High-precision MobileNetV2 backend
-      this.model = await cocoSsd.load({
-        base: 'mobilenet_v2',
-      });
 
       this.inferenceCanvas = document.createElement('canvas');
       this.inferenceCanvas.width = this.INFERENCE_WIDTH;

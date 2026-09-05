@@ -29,9 +29,14 @@ export class YoloService {
   private offscreenCtx: CanvasRenderingContext2D | null = null;
 
   constructor() {
-    // Configure ONNX WebAssembly environment
-    ort.env.wasm.numThreads = 2;
-    ort.env.wasm.simd = true;
+    // Configure ONNX WebAssembly environment with reliable CDN wasm loader
+    try {
+      ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.simd = true;
+    } catch (e) {
+      console.warn('ONNX environment initialization note:', e);
+    }
   }
 
   public async loadYoloModel(modelUrl?: string): Promise<boolean> {
@@ -42,8 +47,9 @@ export class YoloService {
     const defaultUrl = modelUrl || '/models/yolov8n.onnx';
 
     try {
+      // Try WASM provider first for reliable cross-browser execution
       this.session = await ort.InferenceSession.create(defaultUrl, {
-        executionProviders: ['webgl', 'wasm'],
+        executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
       });
 
@@ -54,9 +60,10 @@ export class YoloService {
 
       this.isReady = true;
       this.isLoading = false;
+      console.log('✅ YOLOv8 ONNX model loaded successfully!');
       return true;
     } catch (err) {
-      console.warn('YOLOv8 ONNX model load notice (fallback active):', err);
+      console.warn('YOLOv8 ONNX model load notice (falling back to secondary backend):', err);
       this.isLoading = false;
       return false;
     }
