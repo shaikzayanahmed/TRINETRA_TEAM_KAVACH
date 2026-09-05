@@ -105,29 +105,15 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
               </div>
             </div>
 
-            {/* Cropped License Plate Image Snapshot (Single Clear Snapshot) */}
-            {anpr.plateCropUrl && (
-              <div className="relative w-full h-[46px] rounded bg-black/80 overflow-hidden border border-surface-container-high flex items-center justify-center group/plate">
-                <img
-                  src={anpr.plateCropUrl}
-                  alt={`Plate Crop ${anpr.plateNumber}`}
-                  className="w-full h-full object-contain filter contrast-[1.15] brightness-105"
-                />
-                {/* Optical Scanline Reticle Effect */}
-                <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(149,212,176,0.05)_50%,rgba(0,0,0,0.3)_50%)] bg-[length:100%_4px] opacity-40" />
-                
-                {/* Corner Optical Brackets */}
-                <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 border-t border-l border-secondary" />
-                <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 border-t border-r border-secondary" />
-                <div className="absolute bottom-0.5 left-0.5 w-1.5 h-1.5 border-b border-l border-secondary" />
-                <div className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 border-b border-r border-secondary" />
-
-                {/* Optical Verification Pill */}
-                <div className="absolute top-0.5 right-0.5 px-1 py-0.2 bg-black/75 rounded text-[7px] font-mono text-secondary border border-secondary/30">
-                  LIVE ANPR
-                </div>
-              </div>
-            )}
+            {/* Clean High-Visibility Plate Number Display (Text Only - No Image Crop) */}
+            <div className="px-2.5 py-1 bg-surface-container-lowest/90 rounded border border-secondary/50 flex items-center justify-between gap-2 shadow-tactical-inset">
+              <span className="font-mono text-[12px] font-extrabold tracking-widest text-primary">
+                {anpr.plateNumber}
+              </span>
+              <span className="px-1.5 py-0.2 rounded bg-secondary/20 text-secondary text-[8px] font-bold font-mono border border-secondary/40">
+                {anpr.confidence}% OCR
+              </span>
+            </div>
 
             {/* Bottom Telemetry: Moving Speed & Heading Vector */}
             <div className="flex items-center justify-between text-[8px] font-mono text-outline pt-0.5">
@@ -136,8 +122,8 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
                 <span>{speedKmh} KM/H</span>
                 <span className="text-outline font-normal">| {bearingLabel}</span>
               </div>
-              <div className="text-secondary font-bold">
-                {anpr.confidence}% OCR
+              <div className="text-outline">
+                {anpr.stateCode} SECTOR
               </div>
             </div>
           </div>
