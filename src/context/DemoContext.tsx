@@ -64,6 +64,8 @@ interface DemoContextType {
   prevStep: () => void;
   resetDemo: () => void;
   toggleAutoPlay: () => void;
+  triggerBreach: () => void;
+  setStepDirectly: (step: number) => void;
 }
 
 const DemoContext = createContext<DemoContextType | undefined>(undefined);
@@ -183,6 +185,15 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAutoPlay((prev) => !prev);
   }, []);
 
+  const triggerBreach = useCallback(() => {
+    setIsRunning(false);
+    setStep(3);
+  }, []);
+
+  const setStepDirectly = useCallback((targetStep: number) => {
+    setStep(Math.max(0, Math.min(targetStep, 5)));
+  }, []);
+
   return (
     <DemoContext.Provider
       value={{
@@ -200,6 +211,8 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         prevStep,
         resetDemo,
         toggleAutoPlay,
+        triggerBreach,
+        setStepDirectly,
       }}
     >
       {children}
