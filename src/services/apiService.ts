@@ -113,6 +113,43 @@ class ApiService {
     return this.evidence.find((e) => e.id === id);
   }
 
+  public recordVehicleEvidence(anpr: any, targetId: string, cameraId: string = 'CAM-STREAM-02'): Evidence {
+    const existing = this.evidence.find(
+      (e) => e.plateNumber === anpr.plateNumber || (e.targetId === targetId && e.plateNumber)
+    );
+    if (existing) {
+      existing.thumbnailUrl = anpr.plateCropUrl || existing.thumbnailUrl;
+      return existing;
+    }
+
+    const evidenceId = `EV-ANPR-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newEvidence: Evidence = {
+      id: evidenceId,
+      alertId: anpr.isFlagged ? 'ALT-ANPR-WARN' : 'ALT-ANPR-AUTO',
+      targetId,
+      cameraId,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'KEYFRAME',
+      confidence: anpr.confidence || 98.4,
+      location: `Sector 07 ANPR Checkpoint (${anpr.jurisdiction || 'Northern Sector'})`,
+      sector: 'Northern Border Sector 07',
+      sha256Hash: Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join(''),
+      hashVerified: true,
+      privacyStatus: 'PROCESSED',
+      fileSizeKb: 1420,
+      thumbnailUrl: anpr.plateCropUrl,
+      plateNumber: anpr.plateNumber,
+      vehicleColor: anpr.vehicleColor || 'Silver White',
+      vehicleType: anpr.vehicleType || 'VEHICLE',
+      anprRecord: anpr,
+    };
+
+    this.evidence.unshift(newEvidence);
+    return newEvidence;
+  }
+
   // Environment APIs
   async getEnvironment(): Promise<EnvironmentStatus> {
     await delay(50);

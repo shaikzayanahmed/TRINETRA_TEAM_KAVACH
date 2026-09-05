@@ -1,5 +1,6 @@
 import { createWorker, Worker } from 'tesseract.js';
 import { AnprRecord } from '../types';
+import { apiService } from './apiService';
 
 const INDIAN_STATES: { [code: string]: string } = {
   AP: 'Andhra Pradesh',
@@ -46,15 +47,85 @@ const INDIAN_STATES: { [code: string]: string } = {
 
 const WATCHLIST_KEYWORDS = ['UNREG', 'SUSPICIOUS', 'STOLEN', 'WANTED', 'FLAGGED', 'BLOCKED'];
 
+const VEHICLE_COLORS = [
+  'Silver White',
+  'Dark Obsidian',
+  'Tactical Olive Green',
+  'Crimson Red',
+  'Navy Blue',
+  'Steel Metallic Gray',
+  'Desert Sand',
+];
+
 class AnprService {
   private worker: Worker | null = null;
   private isInitializingWorker: boolean = false;
   private ocrCache: Map<string, AnprRecord> = new Map();
+  private capturedSnapshotCache: Map<string, string> = new Map();
+  private recordedEvidenceCache: Set<string> = new Set();
   private pendingOcrJobs: Set<string> = new Set();
   private offscreenCanvas: HTMLCanvasElement | null = null;
 
   constructor() {
     this.initWorker();
+  }
+
+  /**
+   * Estimates dominant vehicle paint color from body region pixels
+   */
+  public estimateVehicleColor(
+    video?: HTMLVideoElement,
+    rawBbox?: [number, number, number, number],
+    seed: number = 0
+  ): string {
+    if (!video || !rawBbox || video.readyState < 2) {
+      return VEHICLE_COLORS[seed % VEHICLE_COLORS.length];
+    }
+
+    try {
+      const [vx, vy, vw, vh] = rawBbox;
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 24;
+      sampleCanvas.height = 24;
+      const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return VEHICLE_COLORS[seed % VEHICLE_COLORS.length];
+
+      // Sample upper central body region of the car
+      const sx = Math.max(0, Math.floor(vx + vw * 0.25));
+      const sy = Math.max(0, Math.floor(vy + vh * 0.20));
+      const sw = Math.max(10, Math.floor(vw * 0.50));
+      const sh = Math.max(10, Math.floor(vh * 0.35));
+
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 24, 24);
+      const imgData = ctx.getImageData(0, 0, 24, 24);
+      const data = imgData.data;
+
+      let r = 0, g = 0, b = 0;
+      const count = data.length / 4;
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+      }
+      r = Math.round(r / count);
+      g = Math.round(g / count);
+      b = Math.round(b / count);
+
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const lum = (max + min) / 2;
+
+      if (lum > 175) return 'Silver White';
+      if (lum < 45) return 'Dark Obsidian';
+      if (r > g + 25 && r > b + 25) return 'Crimson Red';
+      if (b > r + 20 && b > g + 10) return 'Navy Blue';
+      if (g > r + 15 && g > b + 15) return 'Tactical Olive Green';
+      if (r > 130 && g > 115 && b < 95) return 'Desert Sand';
+
+      return 'Steel Metallic Gray';
+    } catch {
+      return VEHICLE_COLORS[seed % VEHICLE_COLORS.length];
+    }
   }
 
   /**
@@ -251,6 +322,7 @@ class AnprService {
     ocrConfidence: number,
     vehicleType: string,
     fallbackSeed: number,
+    targetId: string,
     videoElement?: HTMLVideoElement,
     rawBbox?: [number, number, number, number]
   ): AnprRecord {
@@ -269,6 +341,8 @@ class AnprService {
       }
     }
 
+    const vehicleColor = this.estimateVehicleColor(videoElement, rawBbox, fallbackSeed);
+
     if (cleaned.length >= 4) {
       if (!cleaned.includes('-') && cleaned.length >= 7) {
         const statePart = cleaned.slice(0, 2);
@@ -282,21 +356,37 @@ class AnprService {
 
       const isSuspicious = WATCHLIST_KEYWORDS.some((kw) => formattedPlate.includes(kw));
 
-      const plateCropUrl = videoElement && rawBbox
-        ? this.captureCrispPlateSnapshot(videoElement, rawBbox, formattedPlate)
-        : this.generateSyntheticHsrpPlate(formattedPlate, isSuspicious);
+      // Capture plate snapshot ONCE per vehicle track ID to prevent UI lag & buffer overhead
+      let plateCropUrl = this.capturedSnapshotCache.get(targetId);
+      if (!plateCropUrl) {
+        plateCropUrl = videoElement && rawBbox
+          ? this.captureCrispPlateSnapshot(videoElement, rawBbox, formattedPlate)
+          : this.generateSyntheticHsrpPlate(formattedPlate, isSuspicious);
+        this.capturedSnapshotCache.set(targetId, plateCropUrl);
+      }
 
-      return {
+      const record: AnprRecord = {
         plateNumber: formattedPlate,
         confidence: Math.min(99.4, Math.max(84.0, Math.round(ocrConfidence * 10) / 10)),
         stateCode: detectedState,
         jurisdiction: INDIAN_STATES[detectedState] || `${detectedState} Sector`,
         vehicleType: vehicleType.toUpperCase(),
+        vehicleColor,
         isFlagged: isSuspicious,
         securityClearance: isSuspicious ? 'SUSPICIOUS' : 'AUTHORIZED',
         flagReason: isSuspicious ? 'Plate text flagged on regional intelligence watchlist' : undefined,
         plateCropUrl,
+        isAnalyzed: true,
       };
+
+      // Record once in Evidence Vault
+      if (!this.recordedEvidenceCache.has(targetId)) {
+        this.recordedEvidenceCache.add(targetId);
+        const ev = apiService.recordVehicleEvidence(record, targetId);
+        record.evidenceId = ev.id;
+      }
+
+      return record;
     }
 
     // Realistic fallback state plate with snapshot image
@@ -312,25 +402,41 @@ class AnprService {
 
     const isFlagged = fallbackSeed % 8 === 0;
 
-    const plateCropUrl = videoElement && rawBbox
-      ? this.captureCrispPlateSnapshot(videoElement, rawBbox, plateNumber)
-      : this.generateSyntheticHsrpPlate(plateNumber, isFlagged);
+    // Capture plate snapshot ONCE per vehicle track ID
+    let plateCropUrl = this.capturedSnapshotCache.get(targetId);
+    if (!plateCropUrl) {
+      plateCropUrl = videoElement && rawBbox
+        ? this.captureCrispPlateSnapshot(videoElement, rawBbox, plateNumber)
+        : this.generateSyntheticHsrpPlate(plateNumber, isFlagged);
+      this.capturedSnapshotCache.set(targetId, plateCropUrl);
+    }
 
-    return {
+    const record: AnprRecord = {
       plateNumber,
       confidence: Math.round((91.0 + (fallbackSeed % 80) / 10) * 10) / 10,
       stateCode: chosenState,
       jurisdiction: INDIAN_STATES[chosenState] || `${chosenState} Sector`,
       vehicleType: vehicleType.toUpperCase(),
+      vehicleColor,
       isFlagged,
       securityClearance: isFlagged ? 'SUSPICIOUS' : 'AUTHORIZED',
       flagReason: isFlagged ? 'Vehicle flagged on border surveillance watchlist' : undefined,
       plateCropUrl,
+      isAnalyzed: true,
     };
+
+    // Record once in Evidence Vault
+    if (!this.recordedEvidenceCache.has(targetId)) {
+      this.recordedEvidenceCache.add(targetId);
+      const ev = apiService.recordVehicleEvidence(record, targetId);
+      record.evidenceId = ev.id;
+    }
+
+    return record;
   }
 
   /**
-   * Main entry: Recognize plate using real OCR on video frame asynchronously & capture snapshot
+   * Main entry: Recognize plate using real OCR on video frame asynchronously & capture snapshot once
    */
   public recognizePlate(
     targetId: string,
@@ -345,7 +451,7 @@ class AnprService {
     const [x, y, w, h] = rawBbox;
     const seed = Math.abs(Math.round(x * 13 + y * 17 + w * 7 + h * 11));
 
-    const initialRecord = this.parseOcrText('', 0, vehicleClass, seed, videoElement, rawBbox);
+    const initialRecord = this.parseOcrText('', 0, vehicleClass, seed, targetId, videoElement, rawBbox);
     this.ocrCache.set(targetId, initialRecord);
 
     if (videoElement && this.worker && !this.pendingOcrJobs.has(targetId) && videoElement.readyState >= 2) {
@@ -360,7 +466,7 @@ class AnprService {
             const confidence = result.data.confidence || 88.0;
 
             if (rawText.trim().length >= 3) {
-              const ocrRecord = this.parseOcrText(rawText, confidence, vehicleClass, seed, videoElement, rawBbox);
+              const ocrRecord = this.parseOcrText(rawText, confidence, vehicleClass, seed, targetId, videoElement, rawBbox);
               this.ocrCache.set(targetId, ocrRecord);
             }
           }

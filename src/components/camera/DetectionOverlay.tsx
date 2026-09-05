@@ -57,6 +57,8 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   const isSuspiciousStill = liveDetection?.isSuspiciousStill || false;
   const stillDurationSeconds = liveDetection?.stillDurationSeconds || 0;
 
+  const isAnalyzed = Boolean(anpr?.isAnalyzed && anpr?.plateNumber);
+
   return (
     <div
       style={{
@@ -69,8 +71,9 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     >
       {/* ========================================================================= */}
       {/* CROPPED NUMBER PLATE & TACTICAL ANPR CARD DISPLAYED DIRECTLY ABOVE THE CAR */}
+      {/* ONLY DISPLAYED ONCE ACCURATE OCR ANALYSIS IS VERIFIED (PREVENTS UI BUFFER) */}
       {/* ========================================================================= */}
-      {anpr && isVehicle ? (
+      {isVehicle && isAnalyzed && anpr ? (
         <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 z-30 flex flex-col items-center select-none pointer-events-auto">
           {/* Main Tactical ANPR Floating Card */}
           <div className={`backdrop-blur-md border rounded-md p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.9)] flex flex-col gap-1 min-w-[200px] max-w-[250px] text-on-surface ${
@@ -78,13 +81,16 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
               ? 'bg-error-container/95 border-error text-error'
               : 'bg-surface-container-lowest/95 border-secondary/70'
           }`}>
-            {/* Top Bar: Target ID & Motion / Suspicious Still Status */}
+            {/* Top Bar: Target ID & Motion / Suspicious Still Status & Vehicle Color */}
             <div className="flex items-center justify-between gap-1 text-[9px] font-mono border-b border-surface-container-high/80 pb-0.5">
               <div className="flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${isSuspiciousStill || isFlagged ? 'bg-error animate-ping' : isMoving ? 'bg-secondary animate-pulse' : 'bg-outline'}`} />
                 <span className="font-bold text-secondary">{targetId}</span>
                 <span className="text-outline">·</span>
                 <span className="text-on-surface/80 uppercase">{classification}</span>
+                {anpr.vehicleColor && (
+                  <span className="text-outline text-[8px]">({anpr.vehicleColor})</span>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <span className={`px-1 py-0.2 rounded font-bold text-[8px] ${
@@ -92,12 +98,12 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
                     ? 'bg-error text-on-error animate-pulse'
                     : 'bg-secondary/20 text-secondary border border-secondary/40'
                 }`}>
-                  {isSuspiciousStill ? `LOITERING ${stillDurationSeconds.toFixed(1)}s` : anpr.securityClearance}
+                  {isSuspiciousStill ? `STILL ${stillDurationSeconds.toFixed(1)}s` : anpr.securityClearance}
                 </span>
               </div>
             </div>
 
-            {/* Cropped License Plate Image Snapshot */}
+            {/* Cropped License Plate Image Snapshot (Single Clear Snapshot) */}
             {anpr.plateCropUrl && (
               <div className="relative w-full h-[46px] rounded bg-black/80 overflow-hidden border border-surface-container-high flex items-center justify-center group/plate">
                 <img
@@ -114,9 +120,9 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
                 <div className="absolute bottom-0.5 left-0.5 w-1.5 h-1.5 border-b border-l border-secondary" />
                 <div className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 border-b border-r border-secondary" />
 
-                {/* Optical Zoom Pill */}
+                {/* Optical Verification Pill */}
                 <div className="absolute top-0.5 right-0.5 px-1 py-0.2 bg-black/75 rounded text-[7px] font-mono text-secondary border border-secondary/30">
-                  {isSuspiciousStill ? 'STILL ANPR LOCK' : 'CROPPED ANPR'}
+                  {isSuspiciousStill ? 'STILL ANPR LOCK' : 'ANPR VERIFIED'}
                 </div>
               </div>
             )}
@@ -137,7 +143,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
                   </span>
                 )}
               </div>
-              <div className="text-outline">
+              <div className="text-secondary font-bold">
                 {anpr.confidence}% OCR
               </div>
             </div>
@@ -150,12 +156,12 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
           </div>
         </div>
       ) : (
-        /* Non-vehicle standard classification header */
+        /* Lightweight classification header before ANPR analysis or for non-vehicle targets */
         <div
           className={`absolute -top-7 left-0 px-2 py-0.5 rounded border font-mono text-[10px] sm:text-[11px] font-bold whitespace-nowrap shadow-[2px_2px_6px_rgba(0,0,0,0.8)] flex items-center gap-1.5 ${badgeColor}`}
         >
           <span className={`w-1.5 h-1.5 rounded-full ${breachState ? 'bg-error animate-ping' : 'bg-current animate-pulse'}`} />
-          <span>{targetId} | {classification} | {confidence}%</span>
+          <span>{targetId} | {classification} {isVehicle ? '· ANALYZING...' : `| ${confidence}%`}</span>
         </div>
       )}
 

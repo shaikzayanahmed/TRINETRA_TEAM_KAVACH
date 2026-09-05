@@ -33,6 +33,7 @@ export interface AnprRecord {
   stateCode: string;
   jurisdiction: string;
   vehicleType: string;
+  vehicleColor?: string;
   isFlagged: boolean;
   securityClearance: 'AUTHORIZED' | 'SUSPICIOUS' | 'UNREGISTERED';
   flagReason?: string;
@@ -40,6 +41,8 @@ export interface AnprRecord {
   speedKmh?: number;
   motionStatus?: 'MOVING' | 'STATIONARY';
   bearing?: string;
+  isAnalyzed?: boolean;
+  evidenceId?: string;
 }
 
 export interface Target {
@@ -142,6 +145,11 @@ export interface Evidence {
   fileSizeKb: number;
   durationSeconds?: number;
   thumbnailUrl?: string;
+  plateCropUrl?: string;
+  plateNumber?: string;
+  vehicleColor?: string;
+  vehicleType?: string;
+  anprRecord?: AnprRecord;
 }
 
 export interface EnvironmentStatus {
