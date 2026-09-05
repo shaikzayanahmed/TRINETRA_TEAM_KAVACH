@@ -1,3 +1,5 @@
+import { MOCK_USER, MOCK_CAMERAS, MOCK_ALERTS } from '../mocks/mockData';
+
 export interface CommandItem {
   id: string;
   category: 'NAVIGATION' | 'SIMULATION' | 'TELEMETRY' | 'AI_INTEL';
@@ -8,7 +10,17 @@ export interface CommandItem {
   shortcut?: string;
   route?: string;
   aiResponse?: string;
+  isLearned?: boolean;
 }
+
+export interface LearnedMemory {
+  aliases: { [phrase: string]: string }; // phrase -> commandId
+  usageFrequency: { [commandId: string]: number }; // commandId -> count
+  totalInteractions: number;
+  lastLearnedAt: string | null;
+}
+
+const STORAGE_KEY = 'trinetra_ai_learned_memory_v1';
 
 export const SYSTEM_COMMANDS: CommandItem[] = [
   // Navigation
@@ -17,7 +29,7 @@ export const SYSTEM_COMMANDS: CommandItem[] = [
     category: 'NAVIGATION',
     title: 'Open Live Surveillance',
     description: 'Switch to live RGB & thermal vision feeds with YOLOv8 detection overlay',
-    keywords: ['surveillance', 'camera', 'cameras', 'live feed', 'video', 'rgb', 'thermal', 'cctv', 'stream'],
+    keywords: ['surveillance', 'camera', 'cameras', 'live feed', 'video', 'rgb', 'thermal', 'cctv', 'stream', 'cams'],
     action: 'NAVIGATE',
     route: '/surveillance',
     shortcut: 'G S',
@@ -212,40 +224,229 @@ export const SYSTEM_COMMANDS: CommandItem[] = [
 ];
 
 export class CommandPromptService {
-  public searchCommands(query: string): CommandItem[] {
-    const cleanQuery = query.trim().toLowerCase();
-    if (!cleanQuery) {
-      return SYSTEM_COMMANDS.slice(0, 8); // Return default popular actions
+  private memory: LearnedMemory;
+
+  constructor() {
+    this.memory = this.loadMemory();
+  }
+
+  private loadMemory(): LearnedMemory {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      } catch (e) {
+        console.warn('Failed to load learned AI memory from localStorage', e);
+      }
+    }
+    return {
+      aliases: {},
+      usageFrequency: {},
+      totalInteractions: 0,
+      lastLearnedAt: null,
+    };
+  }
+
+  private saveMemory(): void {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.memory));
+      } catch (e) {
+        console.warn('Failed to save learned AI memory to localStorage', e);
+      }
+    }
+  }
+
+  public getMemoryStats(): LearnedMemory {
+    return { ...this.memory };
+  }
+
+  public clearMemory(): void {
+    this.memory = {
+      aliases: {},
+      usageFrequency: {},
+      totalInteractions: 0,
+      lastLearnedAt: null,
+    };
+    this.saveMemory();
+  }
+
+  // Learn a new custom phrase mapping explicitly or via auto-binding
+  public learnAlias(phrase: string, commandId: string): boolean {
+    const cleanPhrase = phrase.trim().toLowerCase();
+    const targetCommand = SYSTEM_COMMANDS.find((c) => c.id === commandId);
+    if (!cleanPhrase || !targetCommand) return false;
+
+    this.memory.aliases[cleanPhrase] = commandId;
+    this.memory.lastLearnedAt = new Date().toISOString();
+    this.saveMemory();
+    return true;
+  }
+
+  // Track command execution to boost ranking and learn from user query
+  public recordCommandExecution(commandId: string, userQuery?: string): void {
+    this.memory.totalInteractions += 1;
+    this.memory.usageFrequency[commandId] = (this.memory.usageFrequency[commandId] || 0) + 1;
+
+    // Auto-learn association if the query was unique and not already a standard keyword
+    if (userQuery) {
+      const clean = userQuery.trim().toLowerCase();
+      if (clean.length > 1 && !clean.includes('learn') && !clean.includes('teach')) {
+        const standardCommand = SYSTEM_COMMANDS.find((c) => c.id === commandId);
+        if (standardCommand && !standardCommand.keywords.includes(clean)) {
+          this.memory.aliases[clean] = commandId;
+          this.memory.lastLearnedAt = new Date().toISOString();
+        }
+      }
     }
 
-    return SYSTEM_COMMANDS.filter((cmd) => {
-      const matchTitle = cmd.title.toLowerCase().includes(cleanQuery);
-      const matchDesc = cmd.description.toLowerCase().includes(cleanQuery);
-      const matchKeywords = cmd.keywords.some((kw) => kw.toLowerCase().includes(cleanQuery) || cleanQuery.includes(kw.toLowerCase()));
-      return matchTitle || matchDesc || matchKeywords;
+    this.saveMemory();
+  }
+
+  // Parse explicit teaching syntax e.g. 'learn "cams" = "surveillance"' or 'teach "red alert" = "simulate breach"'
+  public parseTeachingCommand(input: string): { success: boolean; message: string } | null {
+    const clean = input.trim().toLowerCase();
+    const teachPattern = /^(?:learn|teach)\s+["']?([^"']+)["']?\s*=\s*["']?([^"']+)["']?$/i;
+    const match = clean.match(teachPattern);
+
+    if (!match) return null;
+
+    const alias = match[1].trim().toLowerCase();
+    const targetQuery = match[2].trim().toLowerCase();
+
+    // Find target command matching targetQuery
+    const matchedCommand = SYSTEM_COMMANDS.find((c) =>
+      c.title.toLowerCase().includes(targetQuery) ||
+      c.keywords.some((k) => k.toLowerCase() === targetQuery || targetQuery.includes(k.toLowerCase()))
+    );
+
+    if (matchedCommand) {
+      this.learnAlias(alias, matchedCommand.id);
+      return {
+        success: true,
+        message: `LEARNING SUCCESSFUL: Registered alias "${alias}" -> [${matchedCommand.title}]. The AI will now trigger this command when you type "${alias}".`,
+      };
+    } else {
+      return {
+        success: false,
+        message: `LEARNING ERROR: Target command "${targetQuery}" not found. Try mapping to "surveillance", "map", "alerts", or "simulate breach".`,
+      };
+    }
+  }
+
+  public searchCommands(query: string): CommandItem[] {
+    const cleanQuery = query.trim().toLowerCase();
+
+    // Check if query matches any learned alias
+    const learnedCommandId = this.memory.aliases[cleanQuery];
+
+    // Build list of commands with frequency & learned weights
+    let commands = SYSTEM_COMMANDS.map((cmd) => {
+      const freq = this.memory.usageFrequency[cmd.id] || 0;
+      const isLearnedMatch = cmd.id === learnedCommandId;
+      return {
+        ...cmd,
+        isLearned: isLearnedMatch,
+        _weight: freq + (isLearnedMatch ? 50 : 0),
+      };
     });
+
+    if (cleanQuery) {
+      commands = commands.filter((cmd) => {
+        if (cmd.isLearned) return true;
+        const matchTitle = cmd.title.toLowerCase().includes(cleanQuery);
+        const matchDesc = cmd.description.toLowerCase().includes(cleanQuery);
+        const matchKeywords = cmd.keywords.some((kw) => kw.toLowerCase().includes(cleanQuery) || cleanQuery.includes(kw.toLowerCase()));
+        return matchTitle || matchDesc || matchKeywords;
+      });
+    }
+
+    // Sort by learned weight & frequency
+    commands.sort((a, b) => b._weight - a._weight);
+
+    return commands;
+  }
+
+  // Dynamic Context-Aware Reply Generator
+  public generateDynamicAiReply(prompt: string): string {
+    const clean = prompt.trim().toLowerCase();
+
+    // 1. Who is operator / User info
+    if (clean.includes('who') && (clean.includes('user') || clean.includes('operator') || clean.includes('aryan') || clean.includes('logged'))) {
+      return `OPERATOR PROFILE: ${MOCK_USER.name} (${MOCK_USER.callsign}) · Unit: ${MOCK_USER.unit} · Clearance: ${MOCK_USER.securityClearance} · Sector: ${MOCK_USER.sector}.`;
+    }
+
+    // 2. Camera status inquiry
+    if (clean.includes('camera') || clean.includes('sensor status') || clean.includes('cctv')) {
+      const activeCount = MOCK_CAMERAS.filter((c) => c.status === 'ONLINE').length;
+      return `SENSOR TELEMETRY: ${activeCount}/${MOCK_CAMERAS.length} cameras active. Primary: CAM-RGB-01 (1080p @ 30 FPS, Latency: 3.2ms). Thermal: CAM-LWIR-01 (640x512 Uncooled FLIR, Standby).`;
+    }
+
+    // 3. Alerts & Threat counts
+    if (clean.includes('how many') && (clean.includes('threat') || clean.includes('alert') || clean.includes('incident'))) {
+      return `TACTICAL INCIDENT COUNT: ${MOCK_ALERTS.length} total incident logs in current 24-hour cycle. 1 HIGH priority perimeter intrusion (ALT-7821) in Zone Alpha.`;
+    }
+
+    // 4. Identity & System capabilities
+    if (clean.includes('who are you') || clean.includes('what are you') || clean.includes('what can you do')) {
+      return `SYSTEM IDENTIFICATION: I am TRINETRA TACTICAL AI (v2.4-CORE). I manage real-time edge INT8 YOLOv8 inference, spatial virtual tripwires, SHA-256 evidence integrity, and self-learning tactical command routing. You can type commands or ask any border telemetry question.`;
+    }
+
+    // 5. Greeting
+    if (clean.startsWith('hi') || clean.startsWith('hello') || clean.startsWith('hey')) {
+      return `GREETINGS OPERATOR: Tactical AI Console online and monitoring Sector 07. Type a command (e.g. 'surveillance', 'map', 'simulate breach') or teach a custom alias using: learn "alias" = "command".`;
+    }
+
+    // Default conversational AI fallback
+    return `TRINETRA AI: Tactical query "${prompt}" analyzed against Northern Sector 07 edge telemetry. All subsystems nominal. You can execute navigation, simulate events, or teach custom aliases using: learn "your phrase" = "action".`;
   }
 
   public parseNaturalPrompt(prompt: string): { matchedCommand: CommandItem | null; aiDirectAnswer?: string } {
     const clean = prompt.trim().toLowerCase();
     if (!clean) return { matchedCommand: null };
 
-    // Check direct matching command
+    // 1. Check explicit teaching command
+    const teachResult = this.parseTeachingCommand(prompt);
+    if (teachResult) {
+      return {
+        matchedCommand: null,
+        aiDirectAnswer: teachResult.message,
+      };
+    }
+
+    // 2. Check learned alias memory first
+    const learnedCommandId = this.memory.aliases[clean];
+    if (learnedCommandId) {
+      const cmd = SYSTEM_COMMANDS.find((c) => c.id === learnedCommandId);
+      if (cmd) {
+        this.recordCommandExecution(cmd.id, prompt);
+        return {
+          matchedCommand: { ...cmd, isLearned: true },
+          aiDirectAnswer: `[LEARNED ACTION]: Executing ${cmd.title} (Mapped to "${prompt}").`,
+        };
+      }
+    }
+
+    // 3. Check direct keyword match
     const matched = SYSTEM_COMMANDS.find((cmd) => {
       return cmd.keywords.some((kw) => clean.includes(kw) || kw.includes(clean));
     });
 
     if (matched) {
+      this.recordCommandExecution(matched.id, prompt);
       return {
         matchedCommand: matched,
         aiDirectAnswer: matched.aiResponse,
       };
     }
 
-    // Default conversational AI fallback for tactical inquiries
+    // 4. Generate dynamic context-aware answer
+    const dynamicReply = this.generateDynamicAiReply(prompt);
     return {
       matchedCommand: null,
-      aiDirectAnswer: `TRINETRA AI: Tactical intent for "${prompt}" parsed. Use "surveillance", "map", "simulate breach", or "status" to trigger direct subsystem actions.`,
+      aiDirectAnswer: dynamicReply,
     };
   }
 }
