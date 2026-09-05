@@ -1,5 +1,7 @@
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
+import { AnprRecord } from '../types';
+import { anprService } from './anprService';
 
 export interface LiveDetectionResult {
   id: string;
@@ -14,6 +16,7 @@ export interface LiveDetectionResult {
   };
   isTripwireBreach: boolean;
   inferenceTimeMs: number;
+  anpr?: AnprRecord;
 }
 
 class VisionAiService {
@@ -73,10 +76,14 @@ class VisionAiService {
         const isTripwireBreach = centerX > 38 && centerX < 88 && centerY > 20 && centerY < 85;
 
         const targetId = pred.class.toLowerCase() === 'person' ? 'TGT-2048' : `TGT-${2000 + index}`;
+        const upperClass = pred.class.toUpperCase();
+
+        const isVehicle = ['CAR', 'TRUCK', 'BUS', 'MOTORCYCLE'].includes(upperClass);
+        const anpr = isVehicle ? anprService.recognizePlate(targetId, upperClass, pred.bbox) : undefined;
 
         return {
           id: targetId,
-          class: pred.class.toUpperCase(),
+          class: upperClass,
           score: Math.round(pred.score * 1000) / 10,
           bbox: {
             x: normX,
@@ -87,6 +94,7 @@ class VisionAiService {
           },
           isTripwireBreach,
           inferenceTimeMs,
+          anpr,
         };
       });
     } catch (err) {

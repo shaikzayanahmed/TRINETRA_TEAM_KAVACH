@@ -27,6 +27,17 @@ export interface TargetPosition {
   timestamp: string;
 }
 
+export interface AnprRecord {
+  plateNumber: string;
+  confidence: number;
+  stateCode: string;
+  jurisdiction: string;
+  vehicleType: string;
+  isFlagged: boolean;
+  securityClearance: 'AUTHORIZED' | 'SUSPICIOUS' | 'UNREGISTERED';
+  flagReason?: string;
+}
+
 export interface Target {
   id: string;
   classification: TargetClassification;
@@ -47,6 +58,7 @@ export interface Target {
   bearing?: string;
   alertId?: string;
   evidenceId?: string;
+  anpr?: AnprRecord;
 }
 
 export type AlertSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
