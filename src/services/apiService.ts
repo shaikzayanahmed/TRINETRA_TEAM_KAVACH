@@ -25,12 +25,66 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 class ApiService {
   private cameras: Camera[] = [...MOCK_CAMERAS];
   private targets: Target[] = [...MOCK_TARGETS];
-  private alerts: Alert[] = [...MOCK_ALERTS];
+  private alerts: Alert[] = this.loadStoredAlerts();
   private fences: VirtualFence[] = [{ ...MOCK_VIRTUAL_FENCE }];
   private edgeNodes: EdgeNode[] = [{ ...MOCK_EDGE_NODE }];
-  private evidence: Evidence[] = [...MOCK_EVIDENCES];
+  private evidence: Evidence[] = this.loadStoredEvidence();
   private environment: EnvironmentStatus = { ...MOCK_ENVIRONMENT };
   private auditEvents: AuditEvent[] = [...MOCK_AUDIT_EVENTS];
+
+  private loadStoredEvidence(): Evidence[] {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('trinetra_evidence');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load stored evidence:', e);
+    }
+    return [...MOCK_EVIDENCES];
+  }
+
+  private loadStoredAlerts(): Alert[] {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('trinetra_alerts');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load stored alerts:', e);
+    }
+    return [...MOCK_ALERTS];
+  }
+
+  private saveStoredEvidence() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('trinetra_evidence', JSON.stringify(this.evidence.slice(0, 50)));
+      }
+    } catch (e) {
+      console.warn('Failed to save evidence to localStorage:', e);
+    }
+  }
+
+  private saveStoredAlerts() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('trinetra_alerts', JSON.stringify(this.alerts.slice(0, 50)));
+      }
+    } catch (e) {
+      console.warn('Failed to save alerts to localStorage:', e);
+    }
+  }
 
   // Camera APIs
   async getCameras(): Promise<Camera[]> {
@@ -72,6 +126,7 @@ class ApiService {
       alert.status = 'RESOLVED';
       alert.resolvedAt = new Date().toLocaleTimeString();
       alert.resolvedBy = resolvedBy;
+      this.saveStoredAlerts();
     }
     return alert;
   }
@@ -119,6 +174,7 @@ class ApiService {
     );
     if (existing) {
       existing.thumbnailUrl = anpr.plateCropUrl || existing.thumbnailUrl;
+      this.saveStoredEvidence();
       return existing;
     }
 
@@ -147,6 +203,7 @@ class ApiService {
     };
 
     this.evidence.unshift(newEvidence);
+    this.saveStoredEvidence();
     return newEvidence;
   }
 
