@@ -29,9 +29,13 @@ export class YoloService {
   private offscreenCtx: CanvasRenderingContext2D | null = null;
 
   constructor() {
-    // Configure ONNX WebAssembly environment with reliable CDN wasm loader
+    // Configure ONNX WebAssembly environment to load from local public/ directory
     try {
-      ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+      if (typeof window !== 'undefined') {
+        ort.env.wasm.wasmPaths = window.location.origin + '/';
+      } else {
+        ort.env.wasm.wasmPaths = '/';
+      }
       ort.env.wasm.numThreads = 1;
       ort.env.wasm.simd = true;
     } catch (e) {
@@ -47,7 +51,8 @@ export class YoloService {
     const defaultUrl = modelUrl || '/models/yolov8n.onnx';
 
     try {
-      // Try WASM provider first for reliable cross-browser execution
+      console.log(`[YOLOv8 Engine] Loading model weights from: ${defaultUrl}`);
+      // Initialize ONNX InferenceSession with WebGL/WASM execution providers
       this.session = await ort.InferenceSession.create(defaultUrl, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
@@ -60,10 +65,10 @@ export class YoloService {
 
       this.isReady = true;
       this.isLoading = false;
-      console.log('✅ YOLOv8 ONNX model loaded successfully!');
+      console.log('✅ [YOLOv8 Engine] Ultralytics YOLOv8 ONNX model loaded & primed successfully!');
       return true;
     } catch (err) {
-      console.warn('YOLOv8 ONNX model load notice (falling back to secondary backend):', err);
+      console.error('❌ [YOLOv8 Engine] Failed to load YOLOv8 model:', err);
       this.isLoading = false;
       return false;
     }

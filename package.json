@@ -9,8 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow/tfjs": "^4.22.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
     "onnxruntime-web": "^1.29.0",

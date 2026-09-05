@@ -1,5 +1,3 @@
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
-import * as tf from '@tensorflow/tfjs';
 import { AnprRecord } from '../types';
 import { anprService } from './anprService';
 import { yoloService } from './yoloService';
@@ -31,7 +29,7 @@ export interface LiveDetectionResult {
   stillDurationSeconds: number;
   speedKmh: number;
   bearingLabel: string;
-  engine?: 'YOLOv8' | 'MobileNetV2';
+  engine: 'YOLOv8';
 }
 
 interface TrackHistoryPoint {
@@ -64,15 +62,8 @@ interface ActiveTrack {
 const VEHICLE_CLASSES = new Set(['CAR', 'TRUCK', 'BUS', 'MOTORCYCLE']);
 
 class VisionAiService {
-  private model: cocoSsd.ObjectDetection | null = null;
   private isLoading: boolean = false;
   private isReady: boolean = false;
-
-  // Offscreen fast inference canvas
-  private inferenceCanvas: HTMLCanvasElement | null = null;
-  private inferenceCtx: CanvasRenderingContext2D | null = null;
-  private readonly INFERENCE_WIDTH = 512;
-  private readonly INFERENCE_HEIGHT = 384;
 
   // Multi-Object Spatial Centroid Tracker State
   private activeTracks: Map<string, ActiveTrack> = new Map();
@@ -81,52 +72,25 @@ class VisionAiService {
   private nextEntityId: number = 301;
 
   async loadModel(): Promise<boolean> {
-    if (this.isReady && (yoloService.isModelLoaded() || this.model)) return true;
+    if (this.isReady && yoloService.isModelLoaded()) return true;
     if (this.isLoading) return false;
 
     this.isLoading = true;
     try {
-      // 1. Explicitly await YOLOv8 ONNX model load first as the primary engine
-      const yoloReady = await yoloService.loadYoloModel();
-      console.log(`[VisionAI] YOLOv8 engine status: ${yoloReady ? 'READY (PRIMARY)' : 'FALLBACK'}`);
-
-      // 2. If YOLOv8 could not be loaded, initialize MobileNet fallback
-      if (!yoloReady) {
-        if (tf.getBackend() !== 'webgl') {
-          try {
-            await tf.setBackend('webgl');
-            tf.env().set('WEBGL_PACK', true);
-            tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
-            tf.env().set('WEBGL_CPU_FORWARD', false);
-          } catch {
-            // Auto fallback
-          }
-        }
-
-        await tf.ready();
-
-        this.model = await cocoSsd.load({
-          base: 'mobilenet_v2',
-        });
-      }
-
-      this.inferenceCanvas = document.createElement('canvas');
-      this.inferenceCanvas.width = this.INFERENCE_WIDTH;
-      this.inferenceCanvas.height = this.INFERENCE_HEIGHT;
-      this.inferenceCtx = this.inferenceCanvas.getContext('2d', { willReadFrequently: false });
-
-      this.isReady = true;
+      console.log('[VisionAiService] Initializing exclusive YOLOv8 detection engine...');
+      const ready = await yoloService.loadYoloModel();
+      this.isReady = ready;
       this.isLoading = false;
-      return true;
+      return ready;
     } catch (err) {
-      console.warn('Vision model load fallback notice:', err);
+      console.error('[VisionAiService] YOLOv8 initialization error:', err);
       this.isLoading = false;
       return false;
     }
   }
 
   isModelLoaded(): boolean {
-    return this.isReady && (!!this.model || yoloService.isModelLoaded());
+    return this.isReady && yoloService.isModelLoaded();
   }
 
   /**
@@ -374,7 +338,11 @@ class VisionAiService {
     videoElement: HTMLVideoElement,
     options: DetectOptions = {}
   ): Promise<LiveDetectionResult[]> {
-    if (!this.model || !videoElement || videoElement.readyState < 2) {
+    if (!videoElement || videoElement.readyState < 2) {
+      return [];
+    }
+
+    if (!yoloService.isModelLoaded()) {
       return [];
     }
 
@@ -384,35 +352,11 @@ class VisionAiService {
     const now = startTime;
 
     try {
-      let rawPredictions: Array<{ bbox: [number, number, number, number]; class: string; score: number }> = [];
-      let engine: 'YOLOv8' | 'MobileNetV2' = 'MobileNetV2';
-      let srcWidth = videoElement.videoWidth || 640;
-      let srcHeight = videoElement.videoHeight || 480;
+      const srcWidth = videoElement.videoWidth || 640;
+      const srcHeight = videoElement.videoHeight || 480;
 
-      if (yoloService.isModelLoaded()) {
-        const yoloDets = await yoloService.detect(videoElement, minConfidence);
-        rawPredictions = yoloDets;
-        engine = 'YOLOv8';
-      } else if (this.model) {
-        let sourceInput: HTMLCanvasElement | HTMLVideoElement = videoElement;
-        if (this.inferenceCanvas && this.inferenceCtx) {
-          this.inferenceCtx.drawImage(
-            videoElement,
-            0,
-            0,
-            this.INFERENCE_WIDTH,
-            this.INFERENCE_HEIGHT
-          );
-          sourceInput = this.inferenceCanvas;
-        }
-
-        const cocoDets = await this.model.detect(sourceInput, 8, minConfidence);
-        rawPredictions = cocoDets;
-        const isCanvas = sourceInput === this.inferenceCanvas;
-        srcWidth = isCanvas ? this.INFERENCE_WIDTH : (videoElement.videoWidth || 640);
-        srcHeight = isCanvas ? this.INFERENCE_HEIGHT : (videoElement.videoHeight || 480);
-      }
-
+      // Pure YOLOv8 high-precision detection
+      const rawPredictions = await yoloService.detect(videoElement, minConfidence);
       const inferenceTimeMs = Math.round(performance.now() - startTime);
 
       // Clean up stale tracks
@@ -444,13 +388,11 @@ class VisionAiService {
         const score = Math.round(pred.score * 1000) / 10;
 
         // Convert percentage bbox back to video pixel coords for OCR cropping
-        const videoWidth = videoElement.videoWidth || 640;
-        const videoHeight = videoElement.videoHeight || 480;
         const videoRawBbox: [number, number, number, number] = [
-          (normX / 100) * videoWidth,
-          (normY / 100) * videoHeight,
-          (normW / 100) * videoWidth,
-          (normH / 100) * videoHeight,
+          (normX / 100) * srcWidth,
+          (normY / 100) * srcHeight,
+          (normW / 100) * srcWidth,
+          (normH / 100) * srcHeight,
         ];
 
         // Assign persistent unique tracking ID with EMA smoothing
@@ -499,13 +441,13 @@ class VisionAiService {
           stillDurationSeconds,
           speedKmh,
           bearingLabel,
-          engine,
+          engine: 'YOLOv8',
         });
       }
 
       return mappedResults;
     } catch (err) {
-      console.warn('Inference error:', err);
+      console.warn('YOLOv8 Inference error:', err);
       return [];
     }
   }

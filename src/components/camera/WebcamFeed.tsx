@@ -18,7 +18,7 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
 
   const { isDetectionVisible, activeTarget, isFenceBreached, isRunning: isDemoRunning } = useDemo();
 
-  // Run real-time browser-accelerated YOLO / COCO-SSD object detection
+  // Run real-time browser-accelerated YOLOv8 object detection
   const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !isDemoRunning,
     filterMode: 'ALL_OBJECTS',

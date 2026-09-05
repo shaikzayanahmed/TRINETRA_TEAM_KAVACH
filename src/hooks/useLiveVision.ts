@@ -25,7 +25,7 @@ export const useLiveVision = (
   const frameCountRef = useRef<number>(0);
   const lastFpsCheckRef = useRef<number>(performance.now());
 
-  const [activeEngine, setActiveEngine] = useState<'YOLOv8' | 'MobileNetV2'>('YOLOv8');
+  const [activeEngine, setActiveEngine] = useState<'YOLOv8'>('YOLOv8');
 
   // Load the model on mount
   useEffect(() => {
