@@ -26,6 +26,8 @@ export interface LiveDetectionResult {
   anpr?: AnprRecord;
   isVehicle: boolean;
   isMoving: boolean;
+  isSuspiciousStill: boolean;
+  stillDurationSeconds: number;
   speedKmh: number;
   bearingLabel: string;
 }
@@ -43,11 +45,15 @@ interface ActiveTrack {
   cy: number;
   width: number;
   height: number;
+  firstSeenMs: number;
   lastSeenMs: number;
+  stationarySinceMs: number | null;
   history: TrackHistoryPoint[];
   score: number;
   anpr?: AnprRecord;
   isMoving: boolean;
+  isSuspiciousStill: boolean;
+  stillDurationSeconds: number;
   speedKmh: number;
   bearingLabel: string;
   frameSeenCount: number;
@@ -122,7 +128,7 @@ class VisionAiService {
    */
   private calculateHeading(dx: number, dy: number): string {
     if (Math.hypot(dx, dy) < 0.15) return 'STATIONARY';
-    const angle = (Math.atan2(dy, dx) * 180) / Math.PI; // -180 to 180 (0 is East, 90 is South)
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
     if (angle >= -22.5 && angle < 22.5) return 'EASTBOUND [E]';
     if (angle >= 22.5 && angle < 67.5) return 'SOUTH-EAST [SE]';
     if (angle >= 67.5 && angle < 112.5) return 'SOUTHBOUND [S]';
@@ -135,7 +141,8 @@ class VisionAiService {
 
   /**
    * Assign or match persistent tracking IDs using spatial centroid proximity,
-   * calculates motion displacement vectors, velocity, and executes OCR for vehicles
+   * calculates motion displacement vectors, velocity, still duration, and only triggers ANPR
+   * for moving vehicles or suspicious prolonged stationary vehicles.
    */
   private matchOrCreateTrack(
     className: string,
@@ -152,6 +159,8 @@ class VisionAiService {
     anpr?: AnprRecord;
     isVehicle: boolean;
     isMoving: boolean;
+    isSuspiciousStill: boolean;
+    stillDurationSeconds: number;
     speedKmh: number;
     bearingLabel: string;
   } {
@@ -213,35 +222,69 @@ class VisionAiService {
         isMoving = totalDisplacement >= 0.35 || velocityPctPerSec >= 0.30;
 
         if (isMoving) {
-          // Tactical speed scaling (approx. 25-95 km/h for vehicles)
           speedKmh = Math.min(110, Math.max(22, Math.round(velocityPctPerSec * 6.5 + 28)));
           bearingLabel = this.calculateHeading(dx, dy);
+          existing.stationarySinceMs = null;
+        } else {
+          if (!existing.stationarySinceMs) {
+            existing.stationarySinceMs = now;
+          }
         }
       } else {
         // Initial detection phase: assume moving if newly entering frame
         isMoving = true;
         speedKmh = 48;
         bearingLabel = 'TRACKING...';
+        existing.stationarySinceMs = null;
+      }
+
+      // Check still / loitering duration
+      let stillDurationSeconds = 0;
+      let isSuspiciousStill = false;
+      if (!isMoving && existing.stationarySinceMs) {
+        const stillMs = now - existing.stationarySinceMs;
+        stillDurationSeconds = Math.round(stillMs / 100) / 10;
+        // If vehicle has been still for >= 2.0 seconds in the perimeter or is flagged, mark as suspicious still
+        isSuspiciousStill = stillMs >= 2000;
       }
 
       existing.isMoving = isMoving;
+      existing.isSuspiciousStill = isSuspiciousStill;
+      existing.stillDurationSeconds = stillDurationSeconds;
       existing.speedKmh = speedKmh;
       existing.bearingLabel = bearingLabel;
 
-      // Update ANPR with cached or fresh OCR result & inject dynamic motion data
-      if (isVehicle) {
-        const anpr = anprService.recognizePlate(existing.id, upperClass, rawBbox, videoElement);
-        anpr.speedKmh = speedKmh;
-        anpr.motionStatus = isMoving ? 'MOVING' : 'STATIONARY';
-        anpr.bearing = bearingLabel;
-        existing.anpr = anpr;
+      // RULE: Only detect & attach ANPR number plate if:
+      // 1. Vehicle is actively moving, OR
+      // 2. Vehicle is a suspicious long-time still vehicle (loitering in perimeter)
+      let anprRecord: AnprRecord | undefined;
+      const shouldDetectPlate = isVehicle && (isMoving || isSuspiciousStill);
+
+      if (shouldDetectPlate) {
+        anprRecord = anprService.recognizePlate(existing.id, upperClass, rawBbox, videoElement);
+        anprRecord.speedKmh = speedKmh;
+        anprRecord.motionStatus = isMoving ? 'MOVING' : 'STATIONARY';
+        anprRecord.bearing = bearingLabel;
+
+        if (isSuspiciousStill) {
+          anprRecord.isFlagged = true;
+          anprRecord.securityClearance = 'SUSPICIOUS';
+          anprRecord.flagReason = `Prolonged stationary vehicle loitering in perimeter (${stillDurationSeconds.toFixed(1)}s)`;
+        }
+
+        existing.anpr = anprRecord;
+      } else {
+        // Neutral static car: clear ANPR plate so it doesn't clutter the screen
+        existing.anpr = undefined;
       }
 
       return {
         id: existing.id,
-        anpr: existing.anpr,
+        anpr: anprRecord,
         isVehicle,
         isMoving,
+        isSuspiciousStill,
+        stillDurationSeconds,
         speedKmh,
         bearingLabel,
       };
@@ -257,11 +300,11 @@ class VisionAiService {
       newId = `TGT-E${this.nextEntityId++}`;
     }
 
-    const anpr = isVehicle ? anprService.recognizePlate(newId, upperClass, rawBbox, videoElement) : undefined;
-    if (anpr) {
-      anpr.speedKmh = 52;
-      anpr.motionStatus = 'MOVING';
-      anpr.bearing = 'EASTBOUND [E]';
+    const initialAnpr = isVehicle ? anprService.recognizePlate(newId, upperClass, rawBbox, videoElement) : undefined;
+    if (initialAnpr) {
+      initialAnpr.speedKmh = 52;
+      initialAnpr.motionStatus = 'MOVING';
+      initialAnpr.bearing = 'EASTBOUND [E]';
     }
 
     const newTrack: ActiveTrack = {
@@ -271,11 +314,15 @@ class VisionAiService {
       cy,
       width: normW,
       height: normH,
+      firstSeenMs: now,
       lastSeenMs: now,
+      stationarySinceMs: null,
       history: [{ cx, cy, time: now }],
       score,
-      anpr,
+      anpr: initialAnpr,
       isMoving: true, // Initialized as moving
+      isSuspiciousStill: false,
+      stillDurationSeconds: 0,
       speedKmh: isVehicle ? 52 : 5,
       bearingLabel: 'ACQUIRING...',
       frameSeenCount: 1,
@@ -285,9 +332,11 @@ class VisionAiService {
 
     return {
       id: newId,
-      anpr,
+      anpr: initialAnpr,
       isVehicle,
       isMoving: true,
+      isSuspiciousStill: false,
+      stillDurationSeconds: 0,
       speedKmh: newTrack.speedKmh,
       bearingLabel: newTrack.bearingLabel,
     };
@@ -361,7 +410,7 @@ class VisionAiService {
         const normW = Math.max(2, Math.min(100, (width / srcWidth) * 100));
         const normH = Math.max(2, Math.min(100, (height / srcHeight) * 100));
 
-        // Spatial Heuristic: Zone Alpha virtual tripwire zone is right-center (X: 35% - 85%, Y: 20% - 80%)
+        // Spatial Heuristic: Tripwire zone
         const centerX = normX + normW / 2;
         const centerY = normY + normH / 2;
         const isTripwireBreach = centerX > 38 && centerX < 88 && centerY > 20 && centerY < 85;
@@ -378,11 +427,13 @@ class VisionAiService {
           (normH / 100) * videoHeight,
         ];
 
-        // Assign persistent unique tracking ID for each human and vehicle with velocity analysis
+        // Assign persistent unique tracking ID for each human and vehicle with velocity & still analysis
         const {
           id: targetId,
           anpr,
           isMoving,
+          isSuspiciousStill,
+          stillDurationSeconds,
           speedKmh,
           bearingLabel,
         } = this.matchOrCreateTrack(
@@ -397,8 +448,9 @@ class VisionAiService {
           videoElement
         );
 
-        // If MOVING_VEHICLES filter is active, only include vehicles that are moving (or initializing)
-        if (filterMode === 'MOVING_VEHICLES' && (!isVehicle || !isMoving)) {
+        // If MOVING_VEHICLES filter is active:
+        // Only include moving vehicles OR suspicious long-time still vehicles, rejecting neutral static clutter!
+        if (filterMode === 'MOVING_VEHICLES' && (!isVehicle || (!isMoving && !isSuspiciousStill))) {
           continue;
         }
 
@@ -418,6 +470,8 @@ class VisionAiService {
           anpr,
           isVehicle,
           isMoving,
+          isSuspiciousStill,
+          stillDurationSeconds,
           speedKmh,
           bearingLabel,
         });
