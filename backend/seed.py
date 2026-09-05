@@ -69,7 +69,7 @@ async def seed():
         session.add_all([admin, operator, viewer])
         print("    [+] Created users: admin, operator, viewer")
 
-        # Demo Camera
+        # Demo Camera 1 (RGB Webcam)
         cam_id = uuid.uuid4()
         demo_camera = Camera(
             id=cam_id,
@@ -81,8 +81,23 @@ async def seed():
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
-        session.add(demo_camera)
-        print("    [+] Created demo camera: CAM-01 Northern Post")
+
+        # Demo Camera 2 (LWIR Thermal)
+        cam2_id = uuid.uuid4()
+        demo_camera2 = Camera(
+            id=cam2_id,
+            name="CAM-02 High-Altitude LWIR Thermal",
+            source_type=CameraSourceType.RTSP,
+            source_url="rtsp://192.168.1.102:554/thermal",
+            location="SRID=4326;POINT(77.5952 34.1531)",
+            status=CameraStatus.ONLINE,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+        session.add_all([demo_camera, demo_camera2])
+        print("    [+] Created demo cameras: CAM-01 Northern Post & CAM-02 LWIR Thermal")
+
 
         # Demo Tripwire Zone
         tripwire = Zone(

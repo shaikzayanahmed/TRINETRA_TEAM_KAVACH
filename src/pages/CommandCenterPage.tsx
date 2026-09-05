@@ -173,11 +173,12 @@ export const CommandCenterPage: React.FC = () => {
 
               {/* Right: LWIR Thermal / Custom Stream */}
               <CameraPanel
-                camera={cameras[1]}
+                camera={cameras[1] || cameras[0]}
                 showDetection={false}
                 isFullscreen={false}
                 onToggleFullscreen={() => setFeedViewMode('CAM-LWIR-01')}
               />
+
             </div>
           ) : (
             <div className="flex flex-col gap-3">

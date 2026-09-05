@@ -96,18 +96,34 @@ class ApiService {
       if (res.ok) {
         const backendCams = await res.json();
         if (Array.isArray(backendCams) && backendCams.length > 0) {
-          return backendCams.map((bc: any, idx: number): Camera => ({
+          const cams = backendCams.map((bc: any, idx: number): Camera => ({
             id: bc.id || `CAM-0${idx + 1}`,
             name: bc.name || `CAM-0${idx + 1}`,
             type: bc.source_type === 'WEBCAM' ? 'RGB' : 'LWIR',
             status: bc.status === 'ONLINE' ? 'ONLINE' : 'WAITING_FOR_INPUT',
             resolution: '1920x1080',
             fps: 30,
-            spectralRange: '0.4 - 0.7 µm (Visible)',
+            spectralRange: bc.source_type === 'WEBCAM' ? '0.4 - 0.7 µm (Visible)' : '8 - 14 µm (Thermal LWIR)',
             location: 'Sector 07 Northern Perimeter',
             sector: 'Sector 07',
             bitrateKbps: 4200,
           }));
+
+          if (cams.length === 1) {
+            cams.push({
+              id: 'CAM-LWIR-01',
+              name: 'CAM-02 High-Altitude Thermal Sentry',
+              type: 'LWIR',
+              status: 'ONLINE',
+              resolution: '640x512',
+              fps: 30,
+              spectralRange: '8 - 14 µm (Thermal LWIR)',
+              location: 'Sector 07 Thermal Post',
+              sector: 'Sector 07',
+              bitrateKbps: 2800,
+            });
+          }
+          return cams;
         }
       }
     } catch (e) {
@@ -116,6 +132,7 @@ class ApiService {
     await delay(50);
     return [...this.cameras];
   }
+
 
   async getCameraById(id: string): Promise<Camera | undefined> {
     await delay(30);

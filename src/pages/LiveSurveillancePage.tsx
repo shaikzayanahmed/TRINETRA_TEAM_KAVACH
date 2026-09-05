@@ -164,13 +164,14 @@ export const LiveSurveillancePage: React.FC = () => {
           {/* Secondary LWIR Thermal / Custom Stream Camera */}
           <div className="flex flex-col gap-2">
             <CameraPanel
-              camera={cameras[1]}
+              camera={cameras[1] || cameras[0]}
               showDetection={showOverlays}
               opticalFilter={opticalFilter}
               isFullscreen={false}
               onToggleFullscreen={() => setViewMode('CAM-LWIR-01')}
             />
           </div>
+
         </div>
       ) : (
         /* Focused Fullscreen Feed View */
