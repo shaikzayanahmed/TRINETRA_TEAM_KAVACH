@@ -47,35 +47,61 @@ export const useLiveVision = (
     }
 
     isRunningRef.current = true;
+    let isCancelled = false;
+    let isInferring = false;
+    let lastInferenceTimestamp = 0;
+    let animFrameId: number;
 
-    const interval = setInterval(async () => {
-      if (!videoRef.current || videoRef.current.readyState < 2) {
-        return;
+    const processFrame = async () => {
+      if (isCancelled) return;
+
+      const now = performance.now();
+      const video = videoRef.current;
+
+      // Only infer if video is ready, not currently inferring, and minimum interval elapsed
+      if (
+        video &&
+        video.readyState >= 2 &&
+        !isInferring &&
+        now - lastInferenceTimestamp >= detectionIntervalMs
+      ) {
+        isInferring = true;
+        lastInferenceTimestamp = now;
+
+        try {
+          const results = await visionAiService.detect(video);
+          if (!isCancelled) {
+            setLiveDetections(results);
+
+            if (results.length > 0) {
+              setLastInferenceTimeMs(results[0].inferenceTimeMs);
+            }
+
+            // Calculate real-time inference FPS
+            frameCountRef.current += 1;
+            if (now - lastFpsCheckRef.current >= 1000) {
+              setFps(Math.round((frameCountRef.current * 1000) / (now - lastFpsCheckRef.current)));
+              frameCountRef.current = 0;
+              lastFpsCheckRef.current = now;
+            }
+          }
+        } catch (e) {
+          console.warn('Inference error in loop:', e);
+        } finally {
+          isInferring = false;
+        }
       }
 
-      try {
-        const results = await visionAiService.detect(videoRef.current);
-        setLiveDetections(results);
-
-        if (results.length > 0) {
-          setLastInferenceTimeMs(results[0].inferenceTimeMs);
-        }
-
-        // Calculate real-time inference FPS
-        frameCountRef.current += 1;
-        const now = performance.now();
-        if (now - lastFpsCheckRef.current >= 1000) {
-          setFps(Math.round((frameCountRef.current * 1000) / (now - lastFpsCheckRef.current)));
-          frameCountRef.current = 0;
-          lastFpsCheckRef.current = now;
-        }
-      } catch (e) {
-        console.warn('Inference error in loop:', e);
+      if (!isCancelled) {
+        animFrameId = requestAnimationFrame(processFrame);
       }
-    }, detectionIntervalMs);
+    };
+
+    animFrameId = requestAnimationFrame(processFrame);
 
     return () => {
-      clearInterval(interval);
+      isCancelled = true;
+      cancelAnimationFrame(animFrameId);
       isRunningRef.current = false;
     };
   }, [enabled, videoRef, detectionIntervalMs]);

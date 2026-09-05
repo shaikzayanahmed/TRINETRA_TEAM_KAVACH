@@ -1,5 +1,5 @@
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
-import '@tensorflow/tfjs';
+import * as tf from '@tensorflow/tfjs';
 import { AnprRecord } from '../types';
 import { anprService } from './anprService';
 
@@ -30,9 +30,12 @@ class VisionAiService {
 
     this.isLoading = true;
     try {
-      // Load standard lightweight mobile model for real-time edge performance
+      // Ensure TF backend (WebGL / WASM) is ready for hardware acceleration
+      await tf.ready();
+
+      // Load ultra-lightweight mobile quantized model for high FPS edge performance
       this.model = await cocoSsd.load({
-        base: 'mobilenet_v2',
+        base: 'lite_mobilenet_v2',
       });
       this.isReady = true;
       this.isLoading = false;
@@ -55,7 +58,7 @@ class VisionAiService {
 
     const startTime = performance.now();
     try {
-      const predictions = await this.model.detect(videoElement, 6, 0.45);
+      const predictions = await this.model.detect(videoElement, 4, 0.48);
       const inferenceTimeMs = Math.round(performance.now() - startTime);
 
       const videoWidth = videoElement.videoWidth || 640;
