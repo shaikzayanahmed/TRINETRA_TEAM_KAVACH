@@ -36,7 +36,7 @@ export const MainLayout: React.FC = () => {
       <Header onOpenCommandPalette={() => setIsCommandPaletteOpen(true)} />
 
       {/* Main Container */}
-      <div className="pt-12 flex-1 flex flex-col">
+      <div className="pt-14 flex-1 flex flex-col">
         {/* Interactive SIH Demo Banner */}
         <DemoBanner />
 
