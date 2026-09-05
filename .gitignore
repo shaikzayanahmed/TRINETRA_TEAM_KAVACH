@@ -1,0 +1,25 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files and secrets
+.env
+.env.local
+.env.*.local
+*.env
+.mcp.json
+mcp_config.json
+
+
+# IDE / OS specific
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build artifacts / caches
+dist/
+build/
+.cache/
