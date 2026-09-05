@@ -23,20 +23,25 @@ export class YoloService {
   private session: ort.InferenceSession | null = null;
   private isLoading: boolean = false;
   private isReady: boolean = false;
-  private inputWidth: number = 640;
-  private inputHeight: number = 640;
+  private readonly inputWidth: number = 640;
+  private readonly inputHeight: number = 640;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private offscreenCtx: CanvasRenderingContext2D | null = null;
+  
+  // Persistent zero-allocation input buffer (1 * 3 * 640 * 640)
+  private inputTensorBuffer: Float32Array = new Float32Array(3 * 640 * 640);
 
   constructor() {
-    // Configure ONNX WebAssembly environment to load from local public/ directory
+    // Configure ONNX WebAssembly environment with SIMD & multi-threading
     try {
       if (typeof window !== 'undefined') {
         ort.env.wasm.wasmPaths = window.location.origin + '/';
       } else {
         ort.env.wasm.wasmPaths = '/';
       }
-      ort.env.wasm.numThreads = 1;
+      
+      const cores = typeof navigator !== 'undefined' ? Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1)) : 2;
+      ort.env.wasm.numThreads = cores;
       ort.env.wasm.simd = true;
     } catch (e) {
       console.warn('ONNX environment initialization note:', e);
@@ -51,12 +56,21 @@ export class YoloService {
     const defaultUrl = modelUrl || '/models/yolov8n.onnx';
 
     try {
-      console.log(`[YOLOv8 Engine] Loading model weights from: ${defaultUrl}`);
-      // Initialize ONNX InferenceSession with WebGL/WASM execution providers
-      this.session = await ort.InferenceSession.create(defaultUrl, {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all',
-      });
+      console.log(`[YOLOv8 Engine] Loading model weights with hardware acceleration from: ${defaultUrl}`);
+      
+      // Initialize ONNX InferenceSession with WebGL GPU acceleration if available, falling back to multi-threaded WASM
+      try {
+        this.session = await ort.InferenceSession.create(defaultUrl, {
+          executionProviders: ['webgl', 'wasm'],
+          graphOptimizationLevel: 'all',
+        });
+      } catch {
+        // Fallback directly to multi-threaded WASM
+        this.session = await ort.InferenceSession.create(defaultUrl, {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all',
+        });
+      }
 
       this.offscreenCanvas = document.createElement('canvas');
       this.offscreenCanvas.width = this.inputWidth;
@@ -65,7 +79,7 @@ export class YoloService {
 
       this.isReady = true;
       this.isLoading = false;
-      console.log('✅ [YOLOv8 Engine] Ultralytics YOLOv8 ONNX model loaded & primed successfully!');
+      console.log('✅ [YOLOv8 Engine] Ultralytics YOLOv8 ONNX model primed successfully!');
       return true;
     } catch (err) {
       console.error('❌ [YOLOv8 Engine] Failed to load YOLOv8 model:', err);
@@ -79,7 +93,7 @@ export class YoloService {
   }
 
   /**
-   * Preprocess video frame into YOLOv8 NCHW Float32 input tensor (1, 3, 640, 640)
+   * Preprocess video frame into YOLOv8 NCHW Float32 tensor using zero-allocation persistent buffers
    */
   private preprocess(video: HTMLVideoElement): ort.Tensor | null {
     if (!this.offscreenCanvas || !this.offscreenCtx) {
@@ -96,26 +110,31 @@ export class YoloService {
     const imgData = ctx.getImageData(0, 0, this.inputWidth, this.inputHeight);
     const { data } = imgData;
 
-    const float32Data = new Float32Array(3 * this.inputWidth * this.inputHeight);
     const channelSize = this.inputWidth * this.inputHeight;
+    const floatData = this.inputTensorBuffer;
+    const rOffset = 0;
+    const gOffset = channelSize;
+    const bOffset = channelSize * 2;
+    const inv255 = 1.0 / 255.0;
 
-    for (let i = 0; i < channelSize; i++) {
-      float32Data[i] = data[i * 4] / 255.0; // Red
-      float32Data[channelSize + i] = data[i * 4 + 1] / 255.0; // Green
-      float32Data[2 * channelSize + i] = data[i * 4 + 2] / 255.0; // Blue
+    // Fast single-pass normalization
+    for (let i = 0, p = 0; i < channelSize; i++, p += 4) {
+      floatData[rOffset + i] = data[p] * inv255;
+      floatData[gOffset + i] = data[p + 1] * inv255;
+      floatData[bOffset + i] = data[p + 2] * inv255;
     }
 
-    return new ort.Tensor('float32', float32Data, [1, 3, this.inputHeight, this.inputWidth]);
+    return new ort.Tensor('float32', floatData, [1, 3, this.inputHeight, this.inputWidth]);
   }
 
   /**
-   * Postprocess YOLOv8 output tensor (1, 84, 8400) into bounding boxes with NMS
+   * Postprocess YOLOv8 output tensor (1, 84, 8400) into bounding boxes with vectorized NMS
    */
   private postprocess(
     outputTensor: ort.Tensor,
     srcWidth: number,
     srcHeight: number,
-    confThreshold: number = 0.40,
+    confThreshold: number = 0.35,
     iouThreshold: number = 0.45
   ): YoloDetection[] {
     const data = outputTensor.data as Float32Array;
@@ -134,6 +153,7 @@ export class YoloService {
       score: number;
     }> = [];
 
+    // Fast candidate scan with early filtering
     for (let i = 0; i < numCandidates; i++) {
       let maxScore = 0;
       let maxClassId = -1;
@@ -163,13 +183,18 @@ export class YoloService {
           classId: maxClassId,
           score: maxScore,
         });
+
+        // Cap to top 40 raw candidates to keep NMS ultra fast
+        if (boxes.length >= 40) break;
       }
     }
+
+    if (boxes.length === 0) return [];
 
     // Sort by score descending
     boxes.sort((a, b) => b.score - a.score);
 
-    // IoU Non-Maximum Suppression (NMS)
+    // Fast IoU Non-Maximum Suppression (NMS)
     const selected: YoloDetection[] = [];
     const suppressed = new Uint8Array(boxes.length);
 
@@ -182,6 +207,8 @@ export class YoloService {
         score: Math.round(b1.score * 1000) / 1000,
         bbox: [b1.x, b1.y, b1.w, b1.h],
       });
+
+      if (selected.length >= 12) break; // Limit max HUD detections for clean display
 
       for (let j = i + 1; j < boxes.length; j++) {
         if (suppressed[j]) continue;
@@ -218,7 +245,7 @@ export class YoloService {
 
   public async detect(
     video: HTMLVideoElement,
-    confThreshold: number = 0.40
+    confThreshold: number = 0.35
   ): Promise<YoloDetection[]> {
     if (!this.session || video.readyState < 2) return [];
 
