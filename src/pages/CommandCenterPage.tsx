@@ -11,8 +11,19 @@ export const CommandCenterPage: React.FC = () => {
   const [alert, setAlert] = useState<Alert | null>(null);
   const [edgeNode, setEdgeNode] = useState<EdgeNode | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [feedViewMode, setFeedViewMode] = useState<'SPLIT' | 'CAM-RGB-01' | 'CAM-LWIR-01'>('SPLIT');
 
   const { activeTarget, activeAlert, isFenceBreached } = useDemo();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && feedViewMode !== 'SPLIT') {
+        setFeedViewMode('SPLIT');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [feedViewMode]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,28 +110,98 @@ export const CommandCenterPage: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         {/* Dual Camera Feeds Stage */}
         <div className="xl:col-span-8 flex flex-col gap-4">
-          <div className="p-3 px-4 rounded-xl bg-surface-container-low border border-surface-container-high/50 flex flex-wrap items-center justify-between shadow-tactical-plate">
+          <div className="p-3 px-4 rounded-xl bg-surface-container-low border border-surface-container-high/50 flex flex-wrap items-center justify-between gap-2 shadow-tactical-plate">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-secondary animate-pulse" />
               <h2 className="font-headline text-sm uppercase tracking-wide text-on-surface font-bold">
                 MULTI-SPECTRAL SURVEILLANCE FEEDS
               </h2>
             </div>
-            <div className="flex items-center gap-3 font-mono text-xs">
-              <span className="px-2 py-0.5 rounded bg-surface-container text-secondary border border-secondary/30 font-semibold">
-                RGB ACTIVE · LWIR STANDBY
-              </span>
-              <span className="text-outline hidden sm:inline">SECTOR: 07 (LEH)</span>
+            
+            {/* Viewport Fullscreen Mode Selector */}
+            <div className="flex items-center gap-1 font-mono text-xs">
+              <div className="flex items-center gap-0.5 bg-surface-container border border-surface-container-high rounded-lg p-0.5 text-[10px]">
+                <button
+                  onClick={() => setFeedViewMode('SPLIT')}
+                  title="Split Dual View"
+                  className={`px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                    feedViewMode === 'SPLIT'
+                      ? 'bg-primary text-on-primary font-bold shadow-sm'
+                      : 'text-outline hover:text-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[12px]">view_column</span>
+                  <span>SPLIT</span>
+                </button>
+                <button
+                  onClick={() => setFeedViewMode('CAM-RGB-01')}
+                  title="Maximize CAM-RGB-01"
+                  className={`px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                    feedViewMode === 'CAM-RGB-01'
+                      ? 'bg-primary text-on-primary font-bold shadow-sm'
+                      : 'text-outline hover:text-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[12px]">videocam</span>
+                  <span>RGB FULLSCREEN</span>
+                </button>
+                <button
+                  onClick={() => setFeedViewMode('CAM-LWIR-01')}
+                  title="Maximize CAM-LWIR-01"
+                  className={`px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                    feedViewMode === 'CAM-LWIR-01'
+                      ? 'bg-tertiary text-on-tertiary font-bold shadow-sm'
+                      : 'text-outline hover:text-tertiary'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[12px]">podcasts</span>
+                  <span>LWIR FULLSCREEN</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Left: Actual Laptop Webcam */}
-            <CameraPanel camera={cameras[0]} showDetection={true} />
+          {feedViewMode === 'SPLIT' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Left: Actual Laptop Webcam */}
+              <CameraPanel
+                camera={cameras[0]}
+                showDetection={true}
+                isFullscreen={false}
+                onToggleFullscreen={() => setFeedViewMode('CAM-RGB-01')}
+              />
 
-            {/* Right: LWIR Thermal Placeholder */}
-            <CameraPanel camera={cameras[1]} showDetection={false} />
-          </div>
+              {/* Right: LWIR Thermal / Custom Stream */}
+              <CameraPanel
+                camera={cameras[1]}
+                showDetection={false}
+                isFullscreen={false}
+                onToggleFullscreen={() => setFeedViewMode('CAM-LWIR-01')}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <CameraPanel
+                camera={cameras.find((c) => c.id === feedViewMode) || cameras[0]}
+                showDetection={true}
+                isFullscreen={true}
+                onToggleFullscreen={() => setFeedViewMode('SPLIT')}
+              />
+              <div className="p-2.5 px-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 flex items-center justify-between font-mono text-xs text-outline">
+                <span className="flex items-center gap-1.5 text-on-surface">
+                  <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                  <span>VIEWING {feedViewMode} IN FULLSCREEN</span>
+                </span>
+                <button
+                  onClick={() => setFeedViewMode('SPLIT')}
+                  className="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-container-high text-primary border border-primary/30 text-[11px] font-bold transition-colors flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">fullscreen_exit</span>
+                  <span>RESTORE DUAL VIEW (ESC)</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Edge AI Telemetry Strip */}
           <div className="p-3 px-4 rounded-xl bg-surface-container-lowest border border-surface-container-high/50 shadow-tactical-inset flex flex-wrap items-center justify-between gap-2 font-mono text-xs">

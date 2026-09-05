@@ -4,11 +4,13 @@ import { apiService } from '../services/apiService';
 import { CameraPanel } from '../components/camera/CameraPanel';
 import { useDemo } from '../context/DemoContext';
 
+type SurveillanceViewMode = 'SPLIT' | 'CAM-RGB-01' | 'CAM-LWIR-01';
+
 export const LiveSurveillancePage: React.FC = () => {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [showOverlays, setShowOverlays] = useState<boolean>(true);
   const [opticalFilter, setOpticalFilter] = useState<'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS'>('STANDARD');
-  const [selectedFeed, setSelectedFeed] = useState<string>('CAM-RGB-01');
+  const [viewMode, setViewMode] = useState<SurveillanceViewMode>('SPLIT');
 
   const { activeTarget, isFenceBreached, startDemo, isRunning } = useDemo();
 
@@ -20,6 +22,17 @@ export const LiveSurveillancePage: React.FC = () => {
     fetchCameras();
   }, []);
 
+  // Listen for Escape key to restore dual view
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && viewMode !== 'SPLIT') {
+        setViewMode('SPLIT');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewMode]);
+
   if (cameras.length === 0) {
     return (
       <div className="w-full h-96 flex items-center justify-center font-mono text-xs text-primary">
@@ -28,6 +41,9 @@ export const LiveSurveillancePage: React.FC = () => {
       </div>
     );
   }
+
+  const activeFullscreenCam = cameras.find((c) => c.id === viewMode);
+  const secondaryCam = cameras.find((c) => c.id !== viewMode);
 
   return (
     <div className="flex flex-col gap-4 select-none">
@@ -49,6 +65,48 @@ export const LiveSurveillancePage: React.FC = () => {
 
         {/* Tactical Controls Toolbar */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          {/* Feed Fullscreen Viewport Mode Selector */}
+          <div className="flex items-center gap-0.5 bg-surface-container border border-surface-container-high rounded-lg p-0.5 text-[11px]">
+            <button
+              onClick={() => setViewMode('SPLIT')}
+              title="Split Dual Camera View"
+              className={`px-2 py-1 rounded-md transition-colors flex items-center gap-1 font-semibold ${
+                viewMode === 'SPLIT'
+                  ? 'bg-primary text-on-primary font-bold shadow-sm'
+                  : 'text-outline hover:text-on-surface'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">view_column</span>
+              <span>SPLIT DUAL</span>
+            </button>
+
+            <button
+              onClick={() => setViewMode('CAM-RGB-01')}
+              title="Maximize CAM-RGB-01 (Visible Laptop Webcam)"
+              className={`px-2 py-1 rounded-md transition-colors flex items-center gap-1 font-semibold ${
+                viewMode === 'CAM-RGB-01'
+                  ? 'bg-primary text-on-primary font-bold shadow-sm'
+                  : 'text-outline hover:text-on-surface'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">videocam</span>
+              <span>RGB FULLSCREEN</span>
+            </button>
+
+            <button
+              onClick={() => setViewMode('CAM-LWIR-01')}
+              title="Maximize CAM-LWIR-01 (Video / VLC Stream & ANPR)"
+              className={`px-2 py-1 rounded-md transition-colors flex items-center gap-1 font-semibold ${
+                viewMode === 'CAM-LWIR-01'
+                  ? 'bg-tertiary text-on-tertiary font-bold shadow-sm'
+                  : 'text-outline hover:text-tertiary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">podcasts</span>
+              <span>LWIR / ANPR FULLSCREEN</span>
+            </button>
+          </div>
+
           <button
             onClick={() => setShowOverlays((prev) => !prev)}
             className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
@@ -88,28 +146,78 @@ export const LiveSurveillancePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Exactly Two Surveillance Camera Panels: RGB & LWIR */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Primary RGB Camera: Actual Laptop Webcam */}
-        <div
-          onClick={() => setSelectedFeed('CAM-RGB-01')}
-          className={`flex flex-col gap-2 cursor-pointer transition-all ${
-            selectedFeed === 'CAM-RGB-01' ? 'ring-1 ring-primary/60 rounded-xl' : 'opacity-90'
-          }`}
-        >
-          <CameraPanel camera={cameras[0]} showDetection={showOverlays} opticalFilter={opticalFilter} />
-        </div>
+      {/* Viewport Stage: Split Dual Grid vs Focused Fullscreen Feed */}
+      {viewMode === 'SPLIT' ? (
+        /* Split Dual View (Two Surveillance Camera Panels) */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Primary RGB Camera: Laptop Webcam */}
+          <div className="flex flex-col gap-2">
+            <CameraPanel
+              camera={cameras[0]}
+              showDetection={showOverlays}
+              opticalFilter={opticalFilter}
+              isFullscreen={false}
+              onToggleFullscreen={() => setViewMode('CAM-RGB-01')}
+            />
+          </div>
 
-        {/* Secondary LWIR Thermal / Custom Stream Camera */}
-        <div
-          onClick={() => setSelectedFeed('CAM-LWIR-01')}
-          className={`flex flex-col gap-2 cursor-pointer transition-all ${
-            selectedFeed === 'CAM-LWIR-01' ? 'ring-1 ring-tertiary/60 rounded-xl' : 'opacity-90'
-          }`}
-        >
-          <CameraPanel camera={cameras[1]} showDetection={showOverlays} opticalFilter={opticalFilter} />
+          {/* Secondary LWIR Thermal / Custom Stream Camera */}
+          <div className="flex flex-col gap-2">
+            <CameraPanel
+              camera={cameras[1]}
+              showDetection={showOverlays}
+              opticalFilter={opticalFilter}
+              isFullscreen={false}
+              onToggleFullscreen={() => setViewMode('CAM-LWIR-01')}
+            />
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Focused Fullscreen Feed View */
+        <div className="relative w-full flex flex-col gap-3">
+          {/* Fullscreen Camera Panel */}
+          {activeFullscreenCam && (
+            <CameraPanel
+              camera={activeFullscreenCam}
+              showDetection={showOverlays}
+              opticalFilter={opticalFilter}
+              isFullscreen={true}
+              onToggleFullscreen={() => setViewMode('SPLIT')}
+            />
+          )}
+
+          {/* Floating Interactive Picture-in-Picture (PIP) & Feed Switcher */}
+          {secondaryCam && (
+            <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/70 shadow-tactical-plate flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+                <span className="text-outline">FOCUSED FEED:</span>
+                <span className="font-bold text-on-surface uppercase">{activeFullscreenCam?.name}</span>
+                <span className="text-outline-variant">·</span>
+                <span className="text-outline text-[11px]">{activeFullscreenCam?.id}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewMode(secondaryCam.id as SurveillanceViewMode)}
+                  className="px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary font-bold border border-primary/30 transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[15px]">swap_horiz</span>
+                  <span>SWITCH TO {secondaryCam.id}</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode('SPLIT')}
+                  className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface border border-surface-container-high transition-colors flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[15px]">fullscreen_exit</span>
+                  <span>RESTORE DUAL VIEW (ESC)</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Sensor Calibration & Optical Telemetry Detail Strip */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

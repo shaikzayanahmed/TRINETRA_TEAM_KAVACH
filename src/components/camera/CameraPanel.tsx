@@ -8,12 +8,16 @@ interface CameraPanelProps {
   camera: Camera;
   showDetection?: boolean;
   opticalFilter?: 'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS';
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export const CameraPanel: React.FC<CameraPanelProps> = ({
   camera,
   showDetection = true,
   opticalFilter = 'STANDARD',
+  isFullscreen = false,
+  onToggleFullscreen,
 }) => {
   const isRGB = camera.type === 'RGB';
   const [isStreamMode, setIsStreamMode] = useState<boolean>(!isRGB); // Default non-RGB to active stream/selector mode so users can instantly feed video/VLC
@@ -33,7 +37,11 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
   };
 
   return (
-    <div className="rounded-xl overflow-hidden bg-surface-container-low border border-surface-container-high/60 shadow-[-3px_-3px_7px_rgba(255,255,255,0.03),4px_4px_10px_rgba(0,0,0,0.55)] flex flex-col select-none">
+    <div className={`rounded-xl overflow-hidden bg-surface-container-low border flex flex-col select-none transition-all ${
+      isFullscreen
+        ? 'border-primary/80 shadow-[0_0_24px_rgba(173,198,255,0.25)] ring-1 ring-primary/40'
+        : 'border-surface-container-high/60 shadow-[-3px_-3px_7px_rgba(255,255,255,0.03),4px_4px_10px_rgba(0,0,0,0.55)]'
+    }`}>
       {/* Panel Header */}
       <div className="h-9 px-3 sm:px-4 bg-surface-container-lowest border-b border-surface-container/70 flex items-center justify-between font-mono text-xs">
         <div className="flex items-center gap-2">
@@ -46,6 +54,11 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
           </span>
           <span className="text-outline-variant">·</span>
           <span className="text-outline text-[11px]">{camera.id}</span>
+          {isFullscreen && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-primary/20 text-primary border border-primary/40 text-[9px] font-bold">
+              [FULLSCREEN FOCUSED]
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-[11px]">
@@ -87,6 +100,27 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
               [WAITING]
             </span>
           )}
+
+          {/* Fullscreen Toggle Action Button */}
+          {onToggleFullscreen && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFullscreen();
+              }}
+              title={isFullscreen ? 'Exit Fullscreen / Restore Dual View (Esc)' : 'Maximize Feed to Fullscreen'}
+              className={`p-1 rounded transition-colors flex items-center justify-center border ${
+                isFullscreen
+                  ? 'bg-primary text-on-primary border-primary hover:bg-primary/90'
+                  : 'bg-surface-container-high/80 text-outline hover:text-on-surface border-surface-container-highest hover:bg-surface-container-highest'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+              </span>
+            </button>
+          )}
+
           <span className="text-outline-variant hidden sm:inline">·</span>
           <span className="text-on-surface-variant hidden sm:inline">{camera.resolution}</span>
         </div>
