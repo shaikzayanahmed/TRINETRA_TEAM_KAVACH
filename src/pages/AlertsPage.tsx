@@ -46,7 +46,7 @@ export const AlertsPage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  const handleSimulateThreat = () => {
+  const handleSimulateThreat = async () => {
     const newId = `ALT-${Math.floor(1000 + Math.random() * 9000)}`;
     const newAlert: Alert = {
       id: newId,
@@ -66,9 +66,11 @@ export const AlertsPage: React.FC = () => {
       sha256Hash: Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
     };
 
-    setAlerts((prev) => [newAlert, ...prev]);
-    setSelectedAlert(newAlert);
+    const saved = await apiService.createAlert(newAlert);
+    setAlerts((prev) => [saved, ...prev]);
+    setSelectedAlert(saved);
   };
+
 
   const handleResolveAll = async () => {
     setAlerts((prev) =>

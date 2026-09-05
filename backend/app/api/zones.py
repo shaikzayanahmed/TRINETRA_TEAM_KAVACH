@@ -34,17 +34,39 @@ def _coords_to_wkt(zone_type: str, coordinates: list) -> str:
         return f"SRID=4326;POLYGON(({points}))"
 
 
+def _wkt_to_coords(wkt_str: str) -> list:
+    if not wkt_str:
+        return []
+    try:
+        clean = str(wkt_str).split(";")[-1]
+        start = clean.find("(")
+        end = clean.rfind(")")
+        if start != -1 and end != -1:
+            raw = clean[start+1:end].replace("(", "").replace(")", "")
+            pairs = raw.split(",")
+            out = []
+            for p in pairs:
+                pts = p.strip().split()
+                if len(pts) >= 2:
+                    out.append([float(pts[0]), float(pts[1])])
+            return out
+    except Exception:
+        pass
+    return []
+
+
 def _zone_to_response(zone: Zone) -> ZoneResponse:
     return ZoneResponse(
         id=str(zone.id),
         camera_id=str(zone.camera_id),
         name=zone.name,
         zone_type=zone.zone_type.value,
-        coordinates=None,  # Geometry extraction requires PostGIS functions
+        coordinates=_wkt_to_coords(zone.geometry),
         enabled=zone.enabled,
         created_at=zone.created_at.isoformat(),
         updated_at=zone.updated_at.isoformat(),
     )
+
 
 
 @router.get("", response_model=list[ZoneResponse])
