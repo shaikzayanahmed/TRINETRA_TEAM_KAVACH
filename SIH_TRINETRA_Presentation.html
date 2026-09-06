@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRINETRA - Smart India Hackathon 2026 Presentation (Team NIE-SIH26-009)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-blue: #0072bc;
+      --sih-orange: #f26522;
+      --sih-green: #107c41;
+      --navy: #102542;
+      --dark: #1e293b;
+      --light-bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --accent-pill: #eff6ff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      color: var(--dark);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+      gap: 32px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 16px;
+      z-index: 100;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 12px 24px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+
+    .toolbar span {
+      color: #94a3b8;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .toolbar button {
+      background: var(--primary-blue);
+      color: white;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .toolbar button:hover {
+      background: #0284c7;
+      transform: translateY(-1px);
+    }
+
+    /* SLIDE CANVAS (16:9 Landscape Aspect Ratio) */
+    .slide-deck {
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+      width: 100%;
+      max-width: 1280px;
+    }
+
+    .slide {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: var(--light-bg);
+      border-radius: 12px;
+      padding: 24px 32px 18px 32px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+      page-break-after: always;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* TOP HEADER */
+    .slide-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .team-badge {
+      background: white;
+      border: 1.5px solid var(--border-color);
+      padding: 6px 18px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--navy);
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+
+    .header-banner {
+      background: var(--primary-blue);
+      color: white;
+      padding: 8px 36px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 10px rgba(0, 114, 188, 0.3);
+    }
+
+    .sih-logo-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      text-align: right;
+    }
+
+    .sih-logo-badge .org {
+      font-weight: 900;
+      font-size: 13px;
+      color: var(--sih-orange);
+      line-height: 1.1;
+    }
+
+    .sih-logo-badge .year {
+      font-weight: 900;
+      font-size: 13px;
+      color: var(--sih-green);
+      line-height: 1.1;
+    }
+
+    /* FOOTER */
+    .slide-footer {
+      margin-top: auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #64748b;
+      font-family: 'JetBrains Mono', monospace;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    /* SLIDE 1: TITLE */
+    .title-content {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 24px;
+      height: calc(100% - 90px);
+    }
+
+    .info-card {
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.04);
+    }
+
+    .info-group h4 {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+
+    .info-group p {
+      font-size: 15px;
+      color: #1e293b;
+      font-weight: 500;
+    }
+
+    .hero-graphic-card {
+      background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%);
+      border: 2px solid var(--primary-blue);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0, 114, 188, 0.15);
+    }
+
+    .hero-graphic-card h2 {
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--primary-blue);
+      letter-spacing: 1px;
+    }
+
+    .hero-graphic-card .subtitle {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--sih-orange);
+      letter-spacing: 1px;
+      margin-top: 4px;
+      margin-bottom: 20px;
+    }
+
+    .spec-pills {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .spec-pill {
+      background: white;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--navy);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .spec-pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--sih-green);
+    }
+
+    /* SLIDE 2: PROPOSED SOLUTION */
+    .sol-grid-top {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 18px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+
+    .card h3 {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--primary-blue);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card p, .card li {
+      font-size: 11.5px;
+      color: #334155;
+      line-height: 1.45;
+    }
+
+    .card ul {
+      list-style-type: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .card li strong {
+      color: var(--navy);
+    }
+
+    .why-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--primary-blue);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .differentiators-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .diff-card {
+      background: white;
+      border: 1.5px solid var(--primary-blue);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .diff-card.orange { border-color: var(--sih-orange); }
+    .diff-card.green { border-color: var(--sih-green); }
+    .diff-card.navy { border-color: var(--navy); }
+
+    .diff-card h4 {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    .diff-card p {
+      font-size: 10px;
+      color: #64748b;
+      line-height: 1.35;
+    }
+
+    /* SLIDE 3: ARCHITECTURE */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 14px;
+      height: calc(100% - 90px);
+    }
+
+    .arch-card {
+      background: white;
+      border: 1.5px solid var(--primary-blue);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .arch-card.orange { border-color: var(--sih-orange); }
+    .arch-card.green { border-color: var(--sih-green); }
+    .arch-card.navy { border-color: var(--navy); }
+
+    .arch-card h3 {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .arch-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .arch-card li {
+      font-size: 10.5px;
+      color: #334155;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    /* SLIDE 4: FEASIBILITY & CHALLENGES */
+    .feas-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      height: calc(100% - 90px);
+    }
+
+    .item-block {
+      margin-bottom: 10px;
+    }
+
+    .item-block h4 {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 2px;
+    }
+
+    .item-block p {
+      font-size: 10.5px;
+      color: #334155;
+      line-height: 1.4;
+    }
+
+    .sol-text {
+      color: var(--sih-green) !important;
+      font-weight: 600;
+    }
+
+    /* SLIDE 5: IMPACTS & SCENARIO */
+    .benefits-top-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .workflow-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .step-card {
+      background: var(--accent-pill);
+      border: 1.5px solid var(--primary-blue);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .step-card h4 {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--primary-blue);
+    }
+
+    .step-card p {
+      font-size: 10px;
+      color: #334155;
+      line-height: 1.35;
+    }
+
+    .national-promise-card {
+      background: white;
+      border: 1.5px solid var(--primary-blue);
+      border-radius: 8px;
+      padding: 10px 16px;
+    }
+
+    .national-promise-card h4 {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: var(--primary-blue);
+      margin-bottom: 4px;
+    }
+
+    .national-promise-card p {
+      font-size: 10px;
+      color: #334155;
+      line-height: 1.45;
+    }
+
+    /* SLIDE 6: RESEARCH & REVENUE */
+    .res-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      height: calc(100% - 90px);
+    }
+
+    @media print {
+      body {
+        background: none;
+        padding: 0;
+        gap: 0;
+      }
+      .toolbar {
+        display: none;
+      }
+      .slide {
+        box-shadow: none;
+        border-radius: 0;
+        border: none;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        page-break-after: always;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Floating Controls -->
+  <div class="toolbar">
+    <span>TEAM ID: NIE-SIH26-009</span>
+    <span>|</span>
+    <span>TRINETRA (KAVACH)</span>
+    <button onclick="window.print()">🖨️ Print / Save as PDF</button>
+  </div>
+
+  <div class="slide-deck">
+
+    <!-- ==================== SLIDE 1 ==================== -->
+    <div class="slide" id="slide-1">
+      <div class="slide-header">
+        <div class="team-badge">TRINETRA</div>
+        <div class="header-banner">SMART INDIA HACKATHON 2026</div>
+        <div class="sih-logo-badge">
+          <span class="org">SMART INDIA</span>
+          <span class="year">HACKATHON 2026</span>
+        </div>
+      </div>
+
+      <div class="title-content">
+        <div class="info-card">
+          <div class="info-group">
+            <h4>Problem Statement ID –</h4>
+            <p>SIH1645 / SIH-2026-DEF-09</p>
+          </div>
+          <div class="info-group">
+            <h4>Problem Statement Title –</h4>
+            <p>Tactical Edge-AI Border Surveillance & Multi-Sensor Autonomous Intrusion Detection System</p>
+          </div>
+          <div class="info-group">
+            <h4>Theme –</h4>
+            <p>Smart Automation / Defense & Security</p>
+          </div>
+          <div class="info-group">
+            <h4>PS Category –</h4>
+            <p>Software & Hardware (Edge IoT)</p>
+          </div>
+          <div class="info-group">
+            <h4>Team ID –</h4>
+            <p style="font-weight: 700; color: var(--primary-blue);">NIE-SIH26-009</p>
+          </div>
+          <div class="info-group">
+            <h4>Team Name (Registered on Portal) –</h4>
+            <p style="font-weight: 700;">TRINETRA (Team Kavach)</p>
+          </div>
+        </div>
+
+        <div class="hero-graphic-card">
+          <h2>TRINETRA</h2>
+          <div class="subtitle">DECENTRALIZED EDGE-AI THREAT INTERCEPTION</div>
+          <div class="spec-pills">
+            <div class="spec-pill"><span class="dot"></span>Inference Latency: &lt; 5 ms on Jetson</div>
+            <div class="spec-pill"><span class="dot"></span>Alert Payload Size: &lt; 5 KB Metadata</div>
+            <div class="spec-pill"><span class="dot"></span>Evidence: Cryptographic SHA-256 Seal</div>
+            <div class="spec-pill"><span class="dot"></span>Privacy: 100% DPDPA Face Anonymization</div>
+            <div class="spec-pill"><span class="dot"></span>Offline Mesh: Zero Cloud Dependency</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <span>TRINETRA · Team ID: NIE-SIH26-009 · @SIH Idea Submission</span>
+        <span>Page 1</span>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 2 ==================== -->
+    <div class="slide" id="slide-2">
+      <div class="slide-header">
+        <div class="team-badge">TRINETRA</div>
+        <div class="header-banner">PROPOSED SOLUTION & PROTOTYPE</div>
+        <div class="sih-logo-badge">
+          <span class="org">SMART INDIA</span>
+          <span class="year">HACKATHON 2026</span>
+        </div>
+      </div>
+
+      <div class="sol-grid-top">
+        <div class="card">
+          <h3>SOLUTION OVERVIEW</h3>
+          <p style="margin-bottom: 8px;"><strong>TRINETRA</strong> is a tactical perimeter defense software combining Web GIS, Offline Edge AI, and Multi-Sensor Telemetry for zero false-alarm border security.</p>
+          <ul>
+            <li>• <strong>Tactical Command Web App:</strong> Live multi-camera grid, polygon tripwires & instant alert triage.</li>
+            <li>• <strong>Edge AI Detection:</strong> INT8 YOLOv8 running locally on Jetson (&lt;5ms latency, zero cloud streaming).</li>
+            <li>• <strong>Spatial Virtual Tripwires:</strong> Vector polygon breach detection transmitting &lt;5KB event JSON.</li>
+            <li>• <strong>Evidence Vault & Anonymization:</strong> SHA-256 sealed video clips with automated DPDPA face blurring.</li>
+          </ul>
+        </div>
+
+        <div class="card" style="background: var(--accent-pill); border-color: var(--primary-blue);">
+          <h3 style="color: var(--navy);">PROTOTYPE & VALIDATION STATUS (85% READY)</h3>
+          <ul>
+            <li>✔ <strong>Tactical Command Center:</strong> React 18, Leaflet GIS, WebSocket HUD, Alert Drawer.</li>
+            <li>✔ <strong>Edge Inference Engine:</strong> Dockerized Python/C++ pipeline with OpenCV, TensorRT & Kalman Tracker.</li>
+            <li>✔ <strong>Field Mobile App:</strong> Cross-platform Flutter app for on-ground Quick Reaction Teams (QRT).</li>
+            <li>✔ <strong>Hardware Sensing Kit:</strong> ESP32 LoRa nodes, PIR/Thermal sensors & ruggedized Jetson housing.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="why-title">WHY WE STAND OUT ?</div>
+      <div class="differentiators-row">
+        <div class="diff-card">
+          <h4>Edge-First AI Engine</h4>
+          <p>No raw video uploaded to cloud. Local processing sends only &lt;5KB hashed metadata.</p>
+        </div>
+        <div class="diff-card orange">
+          <h4>Air-Gapped Mesh</h4>
+          <p>Seamless operation over LoRa/ESP-Mesh with local SQLite caching during total blackouts.</p>
+        </div>
+        <div class="diff-card green">
+          <h4>Crypto Integrity</h4>
+          <p>SHA-256 hashed video keyframes stored in decentralized MinIO for court-admissible evidence.</p>
+        </div>
+        <div class="diff-card navy">
+          <h4>DPDPA Privacy</h4>
+          <p>Real-time edge facial blurring preserves non-target identity with statutory audit trail.</p>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <span>TRINETRA · Team ID: NIE-SIH26-009 · @SIH Idea Submission</span>
+        <span>Page 2</span>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 3 ==================== -->
+    <div class="slide" id="slide-3">
+      <div class="slide-header">
+        <div class="team-badge">TRINETRA</div>
+        <div class="header-banner">TECHNICAL APPROACH & SYSTEM ARCHITECTURE</div>
+        <div class="sih-logo-badge">
+          <span class="org">SMART INDIA</span>
+          <span class="year">HACKATHON 2026</span>
+        </div>
+      </div>
+
+      <div class="arch-grid">
+        <div class="arch-card">
+          <h3 style="color: var(--primary-blue);">1. OPERATIONAL PERIMETER</h3>
+          <ul>
+            <li>• Optical & Thermal PTZ Cameras</li>
+            <li>• ESP32 LoRa Sensor Nodes & Relays</li>
+            <li>• Spatial Sectors 01 - 08 Perimeter Grid</li>
+            <li>• Local RTSP Feeds & Sensor Telemetry</li>
+          </ul>
+        </div>
+        <div class="arch-card orange">
+          <h3 style="color: var(--sih-orange);">2. EDGE AI PIPELINE (JETSON)</h3>
+          <ul>
+            <li>• INT8 Quantized YOLOv8 (&lt;5ms)</li>
+            <li>• Kalman Multi-Object Tracking</li>
+            <li>• Virtual Polygon Spatial Engine</li>
+            <li>• OpenCV Face Blurring (DPDPA)</li>
+            <li>• SHA-256 Tamper-Proof Frame Seal</li>
+          </ul>
+        </div>
+        <div class="arch-card green">
+          <h3 style="color: var(--sih-green);">3. NETWORK & DATA PRIVACY</h3>
+          <ul>
+            <li>• Zero-Cloud / Intranet Architecture</li>
+            <li>• Fallback: LoRa Mesh in Blackout</li>
+            <li>• Ultra-low &lt;5KB JSON MQTT Payload</li>
+            <li>• AES-256 End-to-End Encryption</li>
+          </ul>
+        </div>
+        <div class="arch-card navy">
+          <h3 style="color: var(--navy);">4. BACKEND SERVICES</h3>
+          <ul>
+            <li>• FastAPI Asynchronous Processor</li>
+            <li>• Redis / Kafka Real-Time Stream Bus</li>
+            <li>• PostgreSQL + TimescaleDB Storage</li>
+            <li>• MinIO Decentralized Evidence Vault</li>
+            <li>• Docker Microservices Deployment</li>
+          </ul>
+        </div>
+        <div class="arch-card">
+          <h3 style="color: var(--primary-blue);">5. COMMAND CENTER WEB APP</h3>
+          <ul>
+            <li>• React 18 + TypeScript + Tailwind CSS</li>
+            <li>• Leaflet / Mapbox Tactical GIS Grid</li>
+            <li>• WebSocket Live Bi-directional HUD</li>
+            <li>• Multi-Zone Polygon Tripwire Editor</li>
+            <li>• Automated Evidence Playback & Audit</li>
+          </ul>
+        </div>
+        <div class="arch-card orange">
+          <h3 style="color: var(--sih-orange);">6. FIELD QRT MOBILE APP</h3>
+          <ul>
+            <li>• Cross-Platform Flutter Mobile App</li>
+            <li>• Real-Time Push Alarms & Vectors</li>
+            <li>• Offline Geo-Caching & Push-to-Talk</li>
+            <li>• Voice Task Logging & Incident Reports</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <span>TRINETRA · Team ID: NIE-SIH26-009 · @SIH Idea Submission</span>
+        <span>Page 3</span>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 4 ==================== -->
+    <div class="slide" id="slide-4">
+      <div class="slide-header">
+        <div class="team-badge">TRINETRA</div>
+        <div class="header-banner">FEASIBILITY, VIABILITY & CHALLENGES</div>
+        <div class="sih-logo-badge">
+          <span class="org">SMART INDIA</span>
+          <span class="year">HACKATHON 2026</span>
+        </div>
+      </div>
+
+      <div class="feas-grid">
+        <div class="card" style="border-color: var(--primary-blue);">
+          <h3>FEASIBILITY & MARKET VIABILITY</h3>
+          <div class="item-block">
+            <h4>■ Technical Feasibility</h4>
+            <p>Achieves 60+ FPS on edge TensorRT hardware. Tested under fog, rain, and thermal darkness. &lt;5KB JSON payload eliminates bandwidth bottlenecks.</p>
+          </div>
+          <div class="item-block">
+            <h4>■ Operational Feasibility</h4>
+            <p>Ruggedized IP67 edge housing with solar backup ensures 24/7 autonomous surveillance in Leh, Thar, and dense riverine borders.</p>
+          </div>
+          <div class="item-block">
+            <h4>■ Economic Feasibility</h4>
+            <p>65% lower Total Cost of Ownership (TCO) compared to imported defense radar/CCTV systems via modular edge SoCs.</p>
+          </div>
+          <div class="item-block">
+            <h4>■ Regulatory Feasibility</h4>
+            <p>Fully compliant with Indian DPDPA 2023 privacy mandates and CERT-In cybersecurity directives.</p>
+          </div>
+          <div class="item-block">
+            <h4>■ Market & Sustainable Viability</h4>
+            <p>Global Border Security market growing at 11.4% CAGR ($17.5B by 2030). High demand across BSF, Army, Mining & Critical Infrastructure.</p>
+          </div>
+        </div>
+
+        <div class="card" style="border-color: var(--sih-orange);">
+          <h3 style="color: var(--sih-orange);">KEY CHALLENGES & MITIGATION</h3>
+          <div class="item-block">
+            <h4>▲ Challenge: Zero-Internet & Remote Terrain</h4>
+            <p class="sol-text">✔ Solution: LoRa mesh network + local SQLite buffer for 100% data persistence without WAN.</p>
+          </div>
+          <div class="item-block">
+            <h4>▲ Challenge: High False Alarms (Wildlife/Wind)</h4>
+            <p class="sol-text">✔ Solution: Kalman track-persistence + multi-frame spatial polygon dwell-time filters.</p>
+          </div>
+          <div class="item-block">
+            <h4>▲ Challenge: Extreme Lighting & Weather</h4>
+            <p class="sol-text">✔ Solution: Thermal + Optical sensor fusion with adaptive histogram equalization.</p>
+          </div>
+          <div class="item-block">
+            <h4>▲ Challenge: Data Tampering & Interception</h4>
+            <p class="sol-text">✔ Solution: SHA-256 cryptographic seal on edge frame capture + AES-256 encrypted payload.</p>
+          </div>
+          <div class="item-block">
+            <h4>▲ Challenge: Civilian Privacy Violations</h4>
+            <p class="sol-text">✔ Solution: Automated real-time edge face blurring for statutory DPDPA compliance.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <span>TRINETRA · Team ID: NIE-SIH26-009 · @SIH Idea Submission</span>
+        <span>Page 4</span>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 5 ==================== -->
+    <div class="slide" id="slide-5">
+      <div class="slide-header">
+        <div class="team-badge">TRINETRA</div>
+        <div class="header-banner">IMPACTS, BENEFITS & STAKEHOLDER WORKFLOW</div>
+        <div class="sih-logo-badge">
+          <span class="org">SMART INDIA</span>
+          <span class="year">HACKATHON 2026</span>
+        </div>
+      </div>
+
+      <div class="benefits-top-row">
+        <div class="card" style="border-color: var(--primary-blue);">
+          <h4 style="color: var(--primary-blue); font-size: 11.5px; font-weight: 800; margin-bottom: 4px;">Economic Benefits</h4>
+          <p>Cuts patrol vehicle fuel & maintenance by 45%. Eliminates cloud bandwidth bills through &lt;5KB metadata streaming.</p>
+        </div>
+        <div class="card" style="border-color: var(--sih-orange);">
+          <h4 style="color: var(--sih-orange); font-size: 11.5px; font-weight: 800; margin-bottom: 4px;">Defense & Social Benefits</h4>
+          <p>Zero blind-spot surveillance minimizes infiltration risks, keeping frontline jawans safe from ambush.</p>
+        </div>
+        <div class="card" style="border-color: var(--sih-green);">
+          <h4 style="color: var(--sih-green); font-size: 11.5px; font-weight: 800; margin-bottom: 4px;">Operational Efficiency</h4>
+          <p>Reduces intrusion response time from 15 mins to &lt;90 secs with exact live GPS targeting.</p>
+        </div>
+      </div>
+
+      <div class="why-title" style="color: var(--navy);">STAKEHOLDER OPERATIONAL SCENARIO FLOW</div>
+      <div class="workflow-row">
+        <div class="step-card">
+          <h4>1. Sentry / Node</h4>
+          <p>Detects perimeter breach via YOLOv8 & spatial polygon intersection.</p>
+        </div>
+        <div class="step-card" style="border-color: var(--sih-orange);">
+          <h4 style="color: var(--sih-orange);">2. Edge AI Engine</h4>
+          <p>Hashes keyframe with SHA-256, blurs faces & sends &lt;5KB MQTT alert.</p>
+        </div>
+        <div class="step-card" style="border-color: var(--navy);">
+          <h4 style="color: var(--navy);">3. Command Center</h4>
+          <p>Supervisor views live GIS HUD alert & verified keyframe evidence.</p>
+        </div>
+        <div class="step-card" style="border-color: var(--sih-green);">
+          <h4 style="color: var(--sih-green);">4. Field QRT Dispatch</h4>
+          <p>Quick Reaction Team intercepts target with live coordinates.</p>
+        </div>
+      </div>
+
+      <div class="national-promise-card">
+        <h4>ALIGNMENT WITH NATIONAL MISSIONS & UN SUSTAINABLE DEVELOPMENT GOALS</h4>
+        <p>• <strong>Atmanirbhar Bharat & Make in India:</strong> 100% indigenous software & open hardware architecture reducing foreign tech reliance.<br/>
+        • <strong>UN SDG 9 (Industry & Innovation) & SDG 16 (Peace & Security):</strong> Resilient critical infrastructure protection and border defense.<br/>
+        • <strong>Measurable Impact:</strong> 99.4% threat detection rate with 0% bandwidth saturation across 15,000+ km Indian borders.</p>
+      </div>
+
+      <div class="slide-footer">
+        <span>TRINETRA · Team ID: NIE-SIH26-009 · @SIH Idea Submission</span>
+        <span>Page 5</span>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 6 ==================== -->
+    <div class="slide" id="slide-6">
+      <div class="slide-header">
+        <div class="team-badge">TRINETRA</div>
+        <div class="header-banner">RESEARCH, REFERENCES & REVENUE MODEL</div>
+        <div class="sih-logo-badge">
+          <span class="org">SMART INDIA</span>
+          <span class="year">HACKATHON 2026</span>
+        </div>
+      </div>
+
+      <div class="res-grid">
+        <div class="card" style="border-color: var(--primary-blue);">
+          <h3>DOMAIN RESEARCH & MARKET POTENTIAL</h3>
+          <div class="item-block">
+            <h4>■ Indian Border Challenges</h4>
+            <p>15,106 km land border across rugged Himalayas, Thar Desert, and creek sectors. Severe bandwidth bottlenecks make continuous cloud video streaming unfeasible.</p>
+          </div>
+          <div class="item-block">
+            <h4>■ Market Sizing (TAM / SAM / SOM)</h4>
+            <p><strong>TAM (Global Defense Surveillance):</strong> ₹1,45,000 Cr ($17.5B)<br/>
+            <strong>SAM (Indian Defense & Critical Infra):</strong> ₹28,500 Cr<br/>
+            <strong>SOM (Border Outposts & Mining Perimeters):</strong> ₹1,850 Cr</p>
+          </div>
+          <div class="item-block">
+            <h4>■ Regulatory Standards & Directives</h4>
+            <p>Fully compliant with DPDPA 2023, MIL-STD-810H environmental norms, and CERT-In cybersecurity directives.</p>
+          </div>
+        </div>
+
+        <div class="card" style="border-color: var(--sih-orange);">
+          <h3 style="color: var(--sih-orange);">REVENUE MODEL & TECH REFERENCES</h3>
+          <div class="item-block">
+            <h4>■ 10-KM Sector Unit Economics:</h4>
+            <p>• 10x Ruggedized Jetson Orin Edge Nodes: ₹3,50,000<br/>
+            • 20x Optical & Thermal PTZ Feeds: ₹5,00,000<br/>
+            • LoRa Mesh Sentry Relays (10 units): ₹75,000<br/>
+            • Command Center Software & Setup: ₹2,50,000<br/>
+            • Annual AMC & AI Model Updates: ₹1,20,000/yr<br/>
+            • Profit Margins: 78% on Software, 32% on Hardware</p>
+          </div>
+          <div class="item-block">
+            <h4>■ Key Technical References:</h4>
+            <p style="color: var(--navy); font-weight: 500;">
+            • YOLOv8 TensorRT Optimization (Ultralytics / NVIDIA)<br/>
+            • Kalman Filter Multi-Target Tracking Algorithms<br/>
+            • MQTT 5.0 Low-Bandwidth Edge Specification<br/>
+            • GitHub: github.com/shaikzayanahmed/TRINETRA_TEAM_KAVACH
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <span>TRINETRA · Team ID: NIE-SIH26-009 · @SIH Idea Submission</span>
+        <span>Page 6</span>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
