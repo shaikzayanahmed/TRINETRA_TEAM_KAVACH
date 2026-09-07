@@ -173,7 +173,7 @@ export class YoloService {
     srcWidth: number,
     srcHeight: number,
     confThreshold: number = 0.35,
-    iouThreshold: number = 0.45
+    iouThreshold: number = 0.38
   ): YoloDetection[] {
     const data = outputTensor.data as Float32Array;
     const numCandidates = 8400;
@@ -232,7 +232,7 @@ export class YoloService {
     // Sort by score descending
     boxes.sort((a, b) => b.score - a.score);
 
-    // Fast IoU Non-Maximum Suppression (NMS)
+    // Fast IoU & Containment Non-Maximum Suppression (NMS)
     const selected: YoloDetection[] = [];
     const suppressed = new Uint8Array(boxes.length);
 
@@ -246,15 +246,40 @@ export class YoloService {
         bbox: [b1.x, b1.y, b1.w, b1.h],
       });
 
-      if (selected.length >= 12) break; // Limit max HUD detections for clean display
+      if (selected.length >= 10) break; // Limit max HUD detections for clean display
+
+      const cx1 = b1.x + b1.w / 2;
+      const cy1 = b1.y + b1.h / 2;
+      const area1 = b1.w * b1.h;
 
       for (let j = i + 1; j < boxes.length; j++) {
         if (suppressed[j]) continue;
         const b2 = boxes[j];
 
+        const cx2 = b2.x + b2.w / 2;
+        const cy2 = b2.y + b2.h / 2;
+        const area2 = b2.w * b2.h;
+
+        const x1 = Math.max(b1.x, b2.x);
+        const y1 = Math.max(b1.y, b2.y);
+        const x2 = Math.min(b1.x + b1.w, b2.x + b2.w);
+        const y2 = Math.min(b1.y + b1.h, b2.y + b2.h);
+
+        const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+        const union = area1 + area2 - intersection;
+        const iou = union <= 0 ? 0 : intersection / union;
+
+        const minArea = Math.min(area1, area2);
+        const ios = minArea > 0 ? intersection / minArea : 0; // Intersection over smaller box
+
+        // Center proximity normalized by bounding box size
+        const maxDimension = Math.max(b1.w, b1.h, b2.w, b2.h);
+        const centerDist = Math.hypot(cx1 - cx2, cy1 - cy2);
+        const isCenterNested = maxDimension > 0 && centerDist / maxDimension < 0.35;
+
+        // Same-class suppression
         if (b1.classId === b2.classId) {
-          const iou = this.computeIoU(b1, b2);
-          if (iou > iouThreshold) {
+          if (iou > iouThreshold || ios > 0.50 || (isCenterNested && ios > 0.35)) {
             suppressed[j] = 1;
           }
         }
@@ -262,23 +287,6 @@ export class YoloService {
     }
 
     return selected;
-  }
-
-  private computeIoU(
-    b1: { x: number; y: number; w: number; h: number },
-    b2: { x: number; y: number; w: number; h: number }
-  ): number {
-    const x1 = Math.max(b1.x, b2.x);
-    const y1 = Math.max(b1.y, b2.y);
-    const x2 = Math.min(b1.x + b1.w, b2.x + b2.w);
-    const y2 = Math.min(b1.y + b1.h, b2.y + b2.h);
-
-    const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-    const area1 = b1.w * b1.h;
-    const area2 = b2.w * b2.h;
-    const union = area1 + area2 - intersection;
-
-    return union <= 0 ? 0 : intersection / union;
   }
 
   public async detect(
