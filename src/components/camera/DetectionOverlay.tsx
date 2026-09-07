@@ -25,8 +25,9 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     height: target?.trajectory[target.trajectory.length - 1]?.height || 48,
   };
 
-  const breachState = !isTripwireDisabled && (liveDetection?.isTripwireBreach || isBreached);
   const classification = liveDetection?.class || target?.classification || 'PERSON';
+  const isHuman = ['PERSON', 'HUMAN'].includes(classification.toUpperCase());
+  const breachState = !isTripwireDisabled && isHuman && (Boolean(liveDetection?.isTripwireBreach) || Boolean(isBreached));
   const confidence = liveDetection?.score || target?.confidence || 96.8;
   const targetId = liveDetection?.id || target?.id || 'TGT-V201';
   const anpr = liveDetection?.anpr || target?.anpr;

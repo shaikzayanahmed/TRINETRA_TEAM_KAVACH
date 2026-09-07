@@ -269,8 +269,8 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
 
       {/* Bottom Spatial Heuristic Filter Tag */}
       <div className="absolute bottom-2 right-2 flex items-center gap-1 font-mono text-[8px] text-outline/80 pointer-events-none bg-surface-container-lowest/70 backdrop-blur px-1.5 py-0.5 rounded border border-surface-container-high/40">
-        <span className="material-symbols-outlined text-[10px] text-primary">polyline</span>
-        <span>POSTGIS CALIBRATED · {fenceType}</span>
+        <span className="material-symbols-outlined text-[10px] text-primary">person</span>
+        <span>POSTGIS · {fenceType} · HUMAN TARGET FILTER</span>
       </div>
     </div>
   );

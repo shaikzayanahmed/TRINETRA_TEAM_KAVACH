@@ -479,7 +479,8 @@ class VisionAiService {
           continue;
         }
 
-        const isTripwireBreach = checkTargetFenceBreach(smoothedCx, smoothedCy);
+        const isHuman = existing.class === 'PERSON' || existing.class === 'HUMAN';
+        const isTripwireBreach = isHuman && checkTargetFenceBreach(smoothedCx, smoothedCy);
 
         mappedResults.push({
           id: existing.id,
@@ -573,7 +574,8 @@ class VisionAiService {
           continue;
         }
 
-        const isTripwireBreach = checkTargetFenceBreach(cand.cx, cand.cy);
+        const isHuman = cand.upperClass === 'PERSON' || cand.upperClass === 'HUMAN';
+        const isTripwireBreach = isHuman && checkTargetFenceBreach(cand.cx, cand.cy);
 
         mappedResults.push({
           id: newId,
@@ -627,7 +629,8 @@ class VisionAiService {
             const smoothed = track.bboxFilter.filter(currentX, currentY, track.width, track.height, now);
             const centerX = smoothed.x + smoothed.width / 2;
             const centerY = smoothed.y + smoothed.height / 2;
-            const isTripwireBreach = checkTargetFenceBreach(centerX, centerY);
+            const isHuman = track.class === 'PERSON' || track.class === 'HUMAN';
+            const isTripwireBreach = isHuman && checkTargetFenceBreach(centerX, centerY);
 
             mappedResults.push({
               id: track.id,
