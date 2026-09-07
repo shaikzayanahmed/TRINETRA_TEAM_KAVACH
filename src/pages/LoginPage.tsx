@@ -68,7 +68,7 @@ export const LoginPage: React.FC = () => {
           {/* Database Connection Status Banner */}
           <div className="mt-1 flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-lowest border border-secondary/40 text-[10px] font-mono text-secondary">
             <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-ping" />
-            <span className="font-bold">PostgreSQL: 127.0.0.1:5432 / antigravity.db</span>
+            <span className="font-bold">PostgreSQL: 127.0.0.1:5432 / trinetra_db</span>
             <span className="text-outline">·</span>
             <span className="text-on-surface-variant">[ONLINE]</span>
           </div>
