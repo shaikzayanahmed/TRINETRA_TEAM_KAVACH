@@ -1,5 +1,5 @@
 """
-Antigravity - Database Seed Script
+Trinetra - Database Seed Script
 ====================================
 Seeds the database with demo data for development.
 """
@@ -39,7 +39,7 @@ async def seed():
         admin = User(
             id=uuid.uuid4(),
             username="admin",
-            email="admin@antigravity.local",
+            email="admin@trinetra.local",
             password_hash=bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
             role=UserRole.ADMIN,
             created_at=datetime.now(timezone.utc),
@@ -49,7 +49,7 @@ async def seed():
         operator = User(
             id=uuid.uuid4(),
             username="operator",
-            email="operator@antigravity.local",
+            email="operator@trinetra.local",
             password_hash=bcrypt.hashpw("operator123".encode(), bcrypt.gensalt()).decode(),
             role=UserRole.OPERATOR,
             created_at=datetime.now(timezone.utc),
@@ -59,7 +59,7 @@ async def seed():
         viewer = User(
             id=uuid.uuid4(),
             username="viewer",
-            email="viewer@antigravity.local",
+            email="viewer@trinetra.local",
             password_hash=bcrypt.hashpw("viewer123".encode(), bcrypt.gensalt()).decode(),
             role=UserRole.VIEWER,
             created_at=datetime.now(timezone.utc),

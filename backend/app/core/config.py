@@ -5,7 +5,7 @@ from pydantic_core import MultiHostUrl
 
 class Settings(BaseSettings):
     """
-    ANTIGRAVITY — Central configuration.
+    TRINETRA — Central configuration.
     All values are loaded from environment variables / .env file.
     """
 
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
-    POSTGRES_DB: str = "antigravity"
+    POSTGRES_DB: str = "trinetra_db"
 
     @computed_field
     @property

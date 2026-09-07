@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useDemo } from '../../context/DemoContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface TacticalMapViewerProps {
   interactive?: boolean;
@@ -20,6 +21,7 @@ export const TacticalMapViewer: React.FC<TacticalMapViewerProps> = ({
   compact = false,
 }) => {
   const { activeTarget, isFenceBreached, activeAlert, triggerBreach, resetDemo } = useDemo();
+  const { isOperator, isAdmin } = useAuth();
   const [zoom, setZoom] = useState<number>(1);
   const [showFence, setShowFence] = useState<boolean>(true);
   const [showSensors, setShowSensors] = useState<boolean>(true);
@@ -203,8 +205,8 @@ export const TacticalMapViewer: React.FC<TacticalMapViewerProps> = ({
           </g>
         )}
 
-        {/* Active Target / Alert Position */}
-        {activeTarget && (
+        {/* Active Target / Alert Position (Restricted to Operator / Admin) */}
+        {(isOperator || isAdmin) && activeTarget && (
           <g transform="translate(340, 220)">
             {/* Target Pulse */}
             <circle cx="0" cy="0" r="24" fill="url(#targetGlow)" className="animate-ping" opacity="0.7" />
@@ -267,22 +269,24 @@ export const TacticalMapViewer: React.FC<TacticalMapViewerProps> = ({
       {/* Map Interactive Controls */}
       {interactive && (
         <div className="absolute bottom-3 right-3 flex flex-col items-end gap-2 font-mono text-xs">
-          {/* Breach Simulation Quick Action Button */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={isFenceBreached ? resetDemo : triggerBreach}
-              className={`px-2.5 py-1 rounded-lg border font-bold uppercase transition-all shadow-md flex items-center gap-1 text-[11px] ${
-                isFenceBreached
-                  ? 'bg-secondary text-on-secondary border-secondary hover:bg-secondary/90'
-                  : 'bg-error-container text-on-error border-error/50 hover:bg-error animate-pulse'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[14px]">
-                {isFenceBreached ? 'refresh' : 'warning'}
-              </span>
-              <span>{isFenceBreached ? 'RESET BREACH' : 'SIMULATE BREACH'}</span>
-            </button>
-          </div>
+          {/* Breach Simulation Quick Action Button (Operator/Admin Only) */}
+          {(isOperator || isAdmin) && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={isFenceBreached ? resetDemo : triggerBreach}
+                className={`px-2.5 py-1 rounded-lg border font-bold uppercase transition-all shadow-md flex items-center gap-1 text-[11px] ${
+                  isFenceBreached
+                    ? 'bg-secondary text-on-secondary border-secondary hover:bg-secondary/90'
+                    : 'bg-error-container text-on-error border-error/50 hover:bg-error animate-pulse'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[14px]">
+                  {isFenceBreached ? 'refresh' : 'warning'}
+                </span>
+                <span>{isFenceBreached ? 'RESET BREACH' : 'SIMULATE BREACH'}</span>
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center gap-1 p-1 rounded-lg bg-surface-container-lowest/90 border border-surface-container-high shadow-md">
             <button

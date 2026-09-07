@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: Threat / Event Engine
+TRINETRA — Edge Engine: Threat / Event Engine
 Extensible event system for generating structured alerts.
 """
 import json
@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, asdict
 from typing import List, Optional
 
-logger = logging.getLogger("antigravity.events")
+logger = logging.getLogger("trinetra.events")
 
 
 @dataclass

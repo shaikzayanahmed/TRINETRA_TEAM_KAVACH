@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: YOLO Object Detection
+TRINETRA — Edge Engine: YOLO Object Detection
 Uses Ultralytics YOLOv8 for real object detection.
 """
 import logging
@@ -9,7 +9,7 @@ from typing import List, Optional
 
 import numpy as np
 
-logger = logging.getLogger("antigravity.detection")
+logger = logging.getLogger("trinetra.detection")
 
 
 @dataclass
@@ -58,7 +58,17 @@ class YOLODetector:
         else:
             self.device = "cpu"
 
-        logger.info(f"YOLO model loaded: {self.model_path} on {self.device}")
+        self.use_fp16 = self.device == "cuda"
+        if self.use_fp16:
+            try:
+                import torch
+                # Enable cuDNN benchmark for highest throughput
+                torch.backends.cudnn.benchmark = True
+                logger.info("⚡ [CUDA Acceleration] cuDNN benchmark & FP16 Half-Precision engaged for NVIDIA GPU")
+            except Exception as e:
+                logger.warning(f"Could not configure cuDNN optimizations: {e}")
+
+        logger.info(f"YOLO model loaded: {self.model_path} on {self.device} (FP16={self.use_fp16})")
 
     def detect(self, frame: np.ndarray) -> List[DetectionResult]:
         """
@@ -73,6 +83,7 @@ class YOLODetector:
             frame,
             conf=self.confidence_threshold,
             device=self.device,
+            half=self.use_fp16,
             verbose=False,
         )
         elapsed = time.time() - start

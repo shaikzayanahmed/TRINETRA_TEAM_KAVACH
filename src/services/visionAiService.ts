@@ -1,12 +1,53 @@
 import { AnprRecord } from '../types';
 import { anprService } from './anprService';
 import { yoloService } from './yoloService';
+import { apiService } from './apiService';
+import { BBoxOneEuroFilter } from '../utils/oneEuroFilter';
 
 export type DetectionFilterMode = 'MOVING_VEHICLES' | 'ALL_VEHICLES' | 'ALL_OBJECTS';
+
+function checkTargetFenceBreach(cx: number, cy: number): boolean {
+  try {
+    const fence = apiService.getActiveFenceSync();
+    if (!fence || fence.status === 'INACTIVE' || !fence.points || fence.points.length < 2) {
+      return false;
+    }
+    const pts = fence.points;
+    const type = fence.type || 'POLYGON';
+
+    if (type === 'TRIPWIRE') {
+      const p1 = pts[0];
+      const p2 = pts[1];
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const l2 = dx * dx + dy * dy;
+      if (l2 === 0) return Math.hypot(cx - p1.x, cy - p1.y) < 8;
+      let t = ((cx - p1.x) * dx + (cy - p1.y) * dy) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projX = p1.x + t * dx;
+      const projY = p1.y + t * dy;
+      return Math.hypot(cx - projX, cy - projY) < 7.5;
+    }
+
+    // Polygon / 3D volumetric floor perimeter
+    if (pts.length >= 3) {
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i].x, yi = pts[i].y;
+        const xj = pts[j].x, yj = pts[j].y;
+        const intersect = ((yi > cy) !== (yj > cy)) && (cx < ((xj - xi) * (cy - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+  } catch (e) {}
+  return cx > 38 && cx < 88 && cy > 20 && cy < 85;
+}
 
 export interface DetectOptions {
   filterMode?: DetectionFilterMode;
   minConfidence?: number;
+  streamId?: string;
 }
 
 export interface LiveDetectionResult {
@@ -30,6 +71,7 @@ export interface LiveDetectionResult {
   speedKmh: number;
   bearingLabel: string;
   engine: 'YOLOv8';
+  isCoasting?: boolean;
 }
 
 interface TrackHistoryPoint {
@@ -57,6 +99,9 @@ interface ActiveTrack {
   speedKmh: number;
   bearingLabel: string;
   frameSeenCount: number;
+  missedFrames: number;
+  bboxFilter: BBoxOneEuroFilter;
+  lastRawBbox: [number, number, number, number];
 }
 
 const VEHICLE_CLASSES = new Set(['CAR', 'TRUCK', 'BUS', 'MOTORCYCLE']);
@@ -65,11 +110,70 @@ class VisionAiService {
   private isLoading: boolean = false;
   private isReady: boolean = false;
 
-  // Multi-Object Spatial Centroid Tracker State
-  private activeTracks: Map<string, ActiveTrack> = new Map();
+  // Multi-Camera Spatial Tracker States isolated per streamId
+  private streamTracks: Map<string, Map<string, ActiveTrack>> = new Map();
   private nextHumanId: number = 101;
   private nextVehicleId: number = 201;
   private nextEntityId: number = 301;
+  private lastBreachReportMs: Map<string, number> = new Map();
+
+  private triggerLiveBreachAlert(
+    targetId: string,
+    streamId: string,
+    score: number,
+    videoElement: HTMLVideoElement,
+    now: number
+  ) {
+    const lastBreach = this.lastBreachReportMs.get(targetId) || 0;
+    if (now - lastBreach < 8000) {
+      return; // 8-second debounce per track
+    }
+    this.lastBreachReportMs.set(targetId, now);
+
+    const activeFence = apiService.getActiveFenceSync();
+    const zoneName = activeFence?.name || 'Sector 07 Zone Alpha';
+
+    // Capture real-time snapshot frame from video canvas
+    let snapshotBase64: string | undefined;
+    try {
+      if (videoElement && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.min(1280, videoElement.videoWidth);
+        canvas.height = Math.min(720, videoElement.videoHeight);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+          snapshotBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        }
+      }
+    } catch (e) {
+      console.warn('[VisionAiService] Failed to capture video snapshot:', e);
+    }
+
+    const { alert, evidence } = apiService.recordBreachEvidenceAndAlert({
+      targetId,
+      cameraId: streamId === 'DEFAULT_STREAM' ? 'CAM-RGB-01' : streamId,
+      zoneName,
+      confidence: score || 98.4,
+      snapshotBase64,
+      videoElement,
+    });
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent('trinetra_live_breach', {
+          detail: { alert, evidence, targetId, zoneName, timestamp: new Date().toISOString() },
+        })
+      );
+    } catch (e) {}
+  }
+
+  private getActiveTracks(streamId: string): Map<string, ActiveTrack> {
+    if (!this.streamTracks.has(streamId)) {
+      this.streamTracks.set(streamId, new Map());
+    }
+    return this.streamTracks.get(streamId)!;
+  }
 
   async loadModel(): Promise<boolean> {
     if (this.isReady && yoloService.isModelLoaded()) return true;
@@ -77,7 +181,7 @@ class VisionAiService {
 
     this.isLoading = true;
     try {
-      console.log('[VisionAiService] Initializing exclusive YOLOv8 detection engine...');
+      console.log('[VisionAiService] Initializing exclusive YOLOv8 detection engine with One-Euro smoothing...');
       const ready = await yoloService.loadYoloModel();
       this.isReady = ready;
       this.isLoading = false;
@@ -91,6 +195,10 @@ class VisionAiService {
 
   isModelLoaded(): boolean {
     return this.isReady && yoloService.isModelLoaded();
+  }
+
+  getProviderDescription(): string {
+    return yoloService.getProviderDescription();
   }
 
   /**
@@ -110,226 +218,104 @@ class VisionAiService {
   }
 
   /**
-   * Assign or match persistent tracking IDs using spatial centroid proximity,
-   * calculates motion displacement vectors, velocity, still duration, and only triggers ANPR
-   * for moving vehicles with EMA coordinate smoothing.
+   * Deduplicate raw predictions before track assignment to remove sub-boxes (e.g. torso inside full body)
    */
-  private matchOrCreateTrack(
-    className: string,
-    normX: number,
-    normY: number,
-    normW: number,
-    normH: number,
-    score: number,
-    rawBbox: [number, number, number, number],
-    now: number,
-    videoElement?: HTMLVideoElement
-  ): {
-    id: string;
-    anpr?: AnprRecord;
-    isVehicle: boolean;
-    isMoving: boolean;
-    isSuspiciousStill: boolean;
-    stillDurationSeconds: number;
-    speedKmh: number;
-    bearingLabel: string;
-    smoothedBbox: { x: number; y: number; width: number; height: number };
-  } {
-    const cx = normX + normW / 2;
-    const cy = normY + normH / 2;
-    const upperClass = className.toUpperCase();
-    const isVehicle = VEHICLE_CLASSES.has(upperClass);
+  private filterRawPredictions(rawPredictions: any[], srcWidth: number, srcHeight: number): any[] {
+    if (rawPredictions.length <= 1) return rawPredictions;
 
-    let bestTrackId: string | null = null;
-    let minDistance = 25; // Proximity threshold in % of viewport
+    const filtered: any[] = [];
+    const suppressed = new Uint8Array(rawPredictions.length);
 
-    // Search active tracks of matching classification
-    for (const [trackId, track] of this.activeTracks.entries()) {
-      const isTrackVehicle = VEHICLE_CLASSES.has(track.class);
-      const isCompatibleClass =
-        track.class === upperClass ||
-        (isVehicle && isTrackVehicle) ||
-        (upperClass === 'PERSON' && track.class === 'PERSON');
+    for (let i = 0; i < rawPredictions.length; i++) {
+      if (suppressed[i]) continue;
+      const p1 = rawPredictions[i];
+      filtered.push(p1);
 
-      if (!isCompatibleClass) continue;
+      const [x1, y1, w1, h1] = p1.bbox;
+      const cx1 = x1 + w1 / 2;
+      const cy1 = y1 + h1 / 2;
+      const area1 = w1 * h1;
+      const c1 = p1.class.toUpperCase();
 
-      const dist = Math.hypot(track.cx - cx, track.cy - cy);
-      if (dist < minDistance) {
-        minDistance = dist;
-        bestTrackId = trackId;
-      }
-    }
+      for (let j = i + 1; j < rawPredictions.length; j++) {
+        if (suppressed[j]) continue;
+        const p2 = rawPredictions[j];
+        const c2 = p2.class.toUpperCase();
 
-    if (bestTrackId && this.activeTracks.has(bestTrackId)) {
-      // Update existing persistent track with EMA coordinate smoothing (Alpha = 0.70)
-      const existing = this.activeTracks.get(bestTrackId)!;
-      const alpha = 0.70;
+        const [x2, y2, w2, h2] = p2.bbox;
+        const cx2 = x2 + w2 / 2;
+        const cy2 = y2 + h2 / 2;
+        const area2 = w2 * h2;
 
-      const smoothedCx = alpha * cx + (1 - alpha) * existing.cx;
-      const smoothedCy = alpha * cy + (1 - alpha) * existing.cy;
-      const smoothedW = alpha * normW + (1 - alpha) * existing.width;
-      const smoothedH = alpha * normH + (1 - alpha) * existing.height;
+        const ix1 = Math.max(x1, x2);
+        const iy1 = Math.max(y1, y2);
+        const ix2 = Math.min(x1 + w1, x2 + w2);
+        const iy2 = Math.min(y1 + h1, y2 + h2);
 
-      existing.history.push({ cx: smoothedCx, cy: smoothedCy, time: now });
-      if (existing.history.length > 10) {
-        existing.history.shift();
-      }
+        const inter = Math.max(0, ix2 - ix1) * Math.max(0, iy2 - iy1);
+        const minArea = Math.min(area1, area2);
+        const union = area1 + area2 - inter;
+        const iou = union > 0 ? inter / union : 0;
+        const ios = minArea > 0 ? inter / minArea : 0;
 
-      existing.frameSeenCount += 1;
-      existing.cx = smoothedCx;
-      existing.cy = smoothedCy;
-      existing.width = smoothedW;
-      existing.height = smoothedH;
-      existing.score = score;
-      existing.lastSeenMs = now;
+        const centerDistPct = (Math.hypot(cx1 - cx2, cy1 - cy2) / Math.max(srcWidth, srcHeight)) * 100;
 
-      // Calculate motion velocity & displacement over sliding history window
-      let isMoving = false;
-      let speedKmh = 0;
-      let bearingLabel = 'STATIONARY';
-
-      if (existing.history.length >= 2) {
-        const oldest = existing.history[0];
-        const dx = smoothedCx - oldest.cx;
-        const dy = smoothedCy - oldest.cy;
-        const totalDisplacement = Math.hypot(dx, dy);
-        const timeDeltaSec = Math.max(0.04, (now - oldest.time) / 1000);
-        const velocityPctPerSec = totalDisplacement / timeDeltaSec;
-
-        // Motion threshold
-        isMoving = totalDisplacement >= 0.30 || velocityPctPerSec >= 0.25;
-
-        if (isMoving) {
-          speedKmh = Math.min(110, Math.max(24, Math.round(velocityPctPerSec * 6.5 + 28)));
-          bearingLabel = this.calculateHeading(dx, dy);
-          existing.stationarySinceMs = null;
-        } else {
-          if (!existing.stationarySinceMs) {
-            existing.stationarySinceMs = now;
+        // Suppress if same class or compatible person/vehicle and overlapping
+        const isSameType = (c1 === c2) || (VEHICLE_CLASSES.has(c1) && VEHICLE_CLASSES.has(c2));
+        if (isSameType) {
+          if (iou > 0.30 || ios > 0.45 || centerDistPct < 15) {
+            suppressed[j] = 1;
           }
         }
-      } else {
-        isMoving = true;
-        speedKmh = 48;
-        bearingLabel = 'TRACKING...';
-        existing.stationarySinceMs = null;
       }
-
-      let stillDurationSeconds = 0;
-      let isSuspiciousStill = false;
-      if (!isMoving && existing.stationarySinceMs) {
-        const stillMs = now - existing.stationarySinceMs;
-        stillDurationSeconds = Math.round(stillMs / 100) / 10;
-        isSuspiciousStill = stillMs >= 2000;
-      }
-
-      existing.isMoving = isMoving;
-      existing.isSuspiciousStill = isSuspiciousStill;
-      existing.stillDurationSeconds = stillDurationSeconds;
-      existing.speedKmh = speedKmh;
-      existing.bearingLabel = bearingLabel;
-
-      // RULE: Only detect & attach ANPR number plate for actively moving vehicles
-      let anprRecord: AnprRecord | undefined;
-      const shouldDetectPlate = isVehicle && isMoving;
-
-      if (shouldDetectPlate) {
-        anprRecord = anprService.recognizePlate(existing.id, upperClass, rawBbox, videoElement);
-        anprRecord.speedKmh = speedKmh;
-        anprRecord.motionStatus = 'MOVING';
-        anprRecord.bearing = bearingLabel;
-
-        existing.anpr = anprRecord;
-      } else {
-        existing.anpr = undefined;
-      }
-
-      const smoothedX = Math.max(0, smoothedCx - smoothedW / 2);
-      const smoothedY = Math.max(0, smoothedCy - smoothedH / 2);
-
-      return {
-        id: existing.id,
-        anpr: anprRecord,
-        isVehicle,
-        isMoving,
-        isSuspiciousStill,
-        stillDurationSeconds,
-        speedKmh,
-        bearingLabel,
-        smoothedBbox: {
-          x: smoothedX,
-          y: smoothedY,
-          width: smoothedW,
-          height: smoothedH,
-        },
-      };
     }
 
-    // Allocate new unique target ID based on classification
-    let newId: string;
-    if (upperClass === 'PERSON') {
-      newId = `TGT-H${this.nextHumanId++}`;
-    } else if (isVehicle) {
-      newId = `TGT-V${this.nextVehicleId++}`;
-    } else {
-      newId = `TGT-E${this.nextEntityId++}`;
-    }
-
-    const initialAnpr = isVehicle ? anprService.recognizePlate(newId, upperClass, rawBbox, videoElement) : undefined;
-    if (initialAnpr) {
-      initialAnpr.speedKmh = 52;
-      initialAnpr.motionStatus = 'MOVING';
-      initialAnpr.bearing = 'EASTBOUND [E]';
-    }
-
-    const newTrack: ActiveTrack = {
-      id: newId,
-      class: upperClass,
-      cx,
-      cy,
-      width: normW,
-      height: normH,
-      firstSeenMs: now,
-      lastSeenMs: now,
-      stationarySinceMs: null,
-      history: [{ cx, cy, time: now }],
-      score,
-      anpr: initialAnpr,
-      isMoving: true, // Initialized as moving
-      isSuspiciousStill: false,
-      stillDurationSeconds: 0,
-      speedKmh: isVehicle ? 52 : 5,
-      bearingLabel: 'ACQUIRING...',
-      frameSeenCount: 1,
-    };
-
-    this.activeTracks.set(newId, newTrack);
-
-    return {
-      id: newId,
-      anpr: initialAnpr,
-      isVehicle,
-      isMoving: true,
-      isSuspiciousStill: false,
-      stillDurationSeconds: 0,
-      speedKmh: newTrack.speedKmh,
-      bearingLabel: newTrack.bearingLabel,
-      smoothedBbox: {
-        x: Math.max(0, normX),
-        y: Math.max(0, normY),
-        width: normW,
-        height: normH,
-      },
-    };
+    return filtered;
   }
 
   /**
-   * Prune inactive tracks not seen in over 1.8 seconds
+   * Merge or prune any overlapping active tracks of the same classification
    */
-  private pruneInactiveTracks(now: number) {
-    for (const [id, track] of this.activeTracks.entries()) {
-      if (now - track.lastSeenMs > 1800) {
-        this.activeTracks.delete(id);
+  private deduplicateActiveTracks(activeTracks: Map<string, ActiveTrack>) {
+    const trackList = Array.from(activeTracks.entries());
+    const toDelete = new Set<string>();
+
+    for (let i = 0; i < trackList.length; i++) {
+      const [id1, t1] = trackList[i];
+      if (toDelete.has(id1)) continue;
+
+      for (let j = i + 1; j < trackList.length; j++) {
+        const [id2, t2] = trackList[j];
+        if (toDelete.has(id2)) continue;
+
+        const isSameClass = t1.class === t2.class || (VEHICLE_CLASSES.has(t1.class) && VEHICLE_CLASSES.has(t2.class));
+        if (!isSameClass) continue;
+
+        const dist = Math.hypot(t1.cx - t2.cx, t1.cy - t2.cy);
+        if (dist < 18) {
+          // Keep the established track with higher frame history, delete the duplicate
+          if (t1.frameSeenCount >= t2.frameSeenCount) {
+            toDelete.add(id2);
+          } else {
+            toDelete.add(id1);
+            break;
+          }
+        }
+      }
+    }
+
+    for (const id of toDelete) {
+      activeTracks.delete(id);
+    }
+  }
+
+  /**
+   * Prune inactive tracks not seen in over 1.2 seconds or missed over 5 consecutive cycles
+   */
+  private pruneInactiveTracks(activeTracks: Map<string, ActiveTrack>, now: number) {
+    for (const [id, track] of activeTracks.entries()) {
+      if (now - track.lastSeenMs > 1200 || track.missedFrames > 5) {
+        activeTracks.delete(id);
       }
     }
   }
@@ -346,7 +332,7 @@ class VisionAiService {
       return [];
     }
 
-    const { filterMode = 'MOVING_VEHICLES', minConfidence = 0.40 } = options;
+    const { filterMode = 'MOVING_VEHICLES', minConfidence = 0.40, streamId = 'DEFAULT_STREAM' } = options;
 
     const startTime = performance.now();
     const now = startTime;
@@ -359,91 +345,382 @@ class VisionAiService {
       const rawPredictions = await yoloService.detect(videoElement, minConfidence);
       const inferenceTimeMs = Math.round(performance.now() - startTime);
 
-      // Clean up stale tracks
-      this.pruneInactiveTracks(now);
+      // Clean up duplicate detections in current frame
+      const cleanPredictions = this.filterRawPredictions(rawPredictions, srcWidth, srcHeight);
 
+      // Get isolated tracks for this camera/stream
+      const activeTracks = this.getActiveTracks(streamId);
+
+      // Deduplicate active tracks for this stream
+      this.deduplicateActiveTracks(activeTracks);
+
+      const matchedTrackIds = new Set<string>();
       const mappedResults: LiveDetectionResult[] = [];
 
-      for (const pred of rawPredictions) {
+      // Parse normalized candidate items
+      interface CandidateItem {
+        className: string;
+        upperClass: string;
+        isVehicle: boolean;
+        normX: number;
+        normY: number;
+        normW: number;
+        normH: number;
+        cx: number;
+        cy: number;
+        score: number;
+        rawBbox: [number, number, number, number];
+      }
+
+      const candidates: CandidateItem[] = [];
+
+      for (const pred of cleanPredictions) {
         const [x, y, width, height] = pred.bbox;
         const upperClass = pred.class.toUpperCase();
         const isVehicle = VEHICLE_CLASSES.has(upperClass);
 
-        // Clutter Rejection Filter
         if ((filterMode === 'MOVING_VEHICLES' || filterMode === 'ALL_VEHICLES') && !isVehicle) {
           continue;
         }
 
-        // Normalize to percentage coordinates
         const normX = Math.max(0, Math.min(100, (x / srcWidth) * 100));
         const normY = Math.max(0, Math.min(100, (y / srcHeight) * 100));
         const normW = Math.max(2, Math.min(100, (width / srcWidth) * 100));
         const normH = Math.max(2, Math.min(100, (height / srcHeight) * 100));
 
-        // Spatial Heuristic: Tripwire zone
-        const centerX = normX + normW / 2;
-        const centerY = normY + normH / 2;
-        const isTripwireBreach = centerX > 38 && centerX < 88 && centerY > 20 && centerY < 85;
-
-        const score = Math.round(pred.score * 1000) / 10;
-
-        // Convert percentage bbox back to video pixel coords for OCR cropping
-        const videoRawBbox: [number, number, number, number] = [
-          (normX / 100) * srcWidth,
-          (normY / 100) * srcHeight,
-          (normW / 100) * srcWidth,
-          (normH / 100) * srcHeight,
-        ];
-
-        // Assign persistent unique tracking ID with EMA smoothing
-        const {
-          id: targetId,
-          anpr,
-          isMoving,
-          isSuspiciousStill,
-          stillDurationSeconds,
-          speedKmh,
-          bearingLabel,
-          smoothedBbox,
-        } = this.matchOrCreateTrack(
-          pred.class,
+        candidates.push({
+          className: pred.class,
+          upperClass,
+          isVehicle,
           normX,
           normY,
           normW,
           normH,
-          score,
-          videoRawBbox,
-          now,
-          videoElement
-        );
+          cx: normX + normW / 2,
+          cy: normY + normH / 2,
+          score: Math.round(pred.score * 1000) / 10,
+          rawBbox: [
+            (normX / 100) * srcWidth,
+            (normY / 100) * srcHeight,
+            (normW / 100) * srcWidth,
+            (normH / 100) * srcHeight,
+          ],
+        });
+      }
 
-        if (filterMode === 'MOVING_VEHICLES' && (!isVehicle || (!isMoving && !isSuspiciousStill))) {
+      // Greedy 1-to-1 matching between candidates and active tracks
+      const assignedCandidates = new Set<number>();
+      const assignedTracks = new Set<string>();
+
+      // Build distance matrix
+      interface MatchPair {
+        candidateIdx: number;
+        trackId: string;
+        distance: number;
+      }
+
+      const matchPairs: MatchPair[] = [];
+
+      for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
+        const cand = candidates[cIdx];
+        for (const [trackId, track] of activeTracks.entries()) {
+          const isTrackVehicle = VEHICLE_CLASSES.has(track.class);
+          const isCompatibleClass =
+            track.class === cand.upperClass ||
+            (cand.isVehicle && isTrackVehicle) ||
+            (cand.upperClass === 'PERSON' && track.class === 'PERSON');
+
+          if (!isCompatibleClass) continue;
+
+          const dist = Math.hypot(track.cx - cand.cx, track.cy - cand.cy);
+          if (dist <= 35) {
+            matchPairs.push({ candidateIdx: cIdx, trackId, distance: dist });
+          }
+        }
+      }
+
+      // Sort by closest distance
+      matchPairs.sort((a, b) => a.distance - b.distance);
+
+      for (const pair of matchPairs) {
+        if (assignedCandidates.has(pair.candidateIdx) || assignedTracks.has(pair.trackId)) {
           continue;
         }
 
+        assignedCandidates.add(pair.candidateIdx);
+        assignedTracks.add(pair.trackId);
+        matchedTrackIds.add(pair.trackId);
+
+        const cand = candidates[pair.candidateIdx];
+        const existing = activeTracks.get(pair.trackId)!;
+
+        existing.missedFrames = 0;
+        existing.lastRawBbox = cand.rawBbox;
+
+        const smoothed = existing.bboxFilter.filter(cand.normX, cand.normY, cand.normW, cand.normH, now);
+        const smoothedCx = smoothed.x + smoothed.width / 2;
+        const smoothedCy = smoothed.y + smoothed.height / 2;
+
+        existing.history.push({ cx: smoothedCx, cy: smoothedCy, time: now });
+        if (existing.history.length > 12) existing.history.shift();
+
+        existing.frameSeenCount += 1;
+        existing.cx = smoothedCx;
+        existing.cy = smoothedCy;
+        existing.width = smoothed.width;
+        existing.height = smoothed.height;
+        existing.score = cand.score;
+        existing.lastSeenMs = now;
+
+        // Calculate motion
+        let isMoving = false;
+        let speedKmh = 0;
+        let bearingLabel = 'STATIONARY';
+
+        if (existing.history.length >= 2) {
+          const oldest = existing.history[0];
+          const dx = smoothedCx - oldest.cx;
+          const dy = smoothedCy - oldest.cy;
+          const totalDisplacement = Math.hypot(dx, dy);
+          const timeDeltaSec = Math.max(0.04, (now - oldest.time) / 1000);
+          const velocityPctPerSec = totalDisplacement / timeDeltaSec;
+
+          isMoving = totalDisplacement >= 0.28 || velocityPctPerSec >= 0.22;
+
+          if (isMoving) {
+            speedKmh = Math.min(110, Math.max(24, Math.round(velocityPctPerSec * 6.5 + 28)));
+            bearingLabel = this.calculateHeading(dx, dy);
+            existing.stationarySinceMs = null;
+          } else {
+            if (!existing.stationarySinceMs) existing.stationarySinceMs = now;
+          }
+        } else {
+          isMoving = true;
+          speedKmh = 48;
+          bearingLabel = 'TRACKING...';
+          existing.stationarySinceMs = null;
+        }
+
+        let stillDurationSeconds = 0;
+        let isSuspiciousStill = false;
+        if (!isMoving && existing.stationarySinceMs) {
+          const stillMs = now - existing.stationarySinceMs;
+          stillDurationSeconds = Math.round(stillMs / 100) / 10;
+          isSuspiciousStill = stillMs >= 2000;
+        }
+
+        existing.isMoving = isMoving;
+        existing.isSuspiciousStill = isSuspiciousStill;
+        existing.stillDurationSeconds = stillDurationSeconds;
+        existing.speedKmh = speedKmh;
+        existing.bearingLabel = bearingLabel;
+
+        // ANPR Trigger
+        let anprRecord: AnprRecord | undefined;
+        if (cand.isVehicle && isMoving) {
+          anprRecord = anprService.recognizePlate(existing.id, cand.upperClass, cand.rawBbox, videoElement);
+          anprRecord.speedKmh = speedKmh;
+          anprRecord.motionStatus = 'MOVING';
+          anprRecord.bearing = bearingLabel;
+          existing.anpr = anprRecord;
+        } else {
+          existing.anpr = undefined;
+        }
+
+        if (filterMode === 'MOVING_VEHICLES' && (!cand.isVehicle || (!isMoving && !isSuspiciousStill))) {
+          continue;
+        }
+
+        const isHuman = existing.class === 'PERSON' || existing.class === 'HUMAN';
+        const isTripwireBreach = isHuman && checkTargetFenceBreach(smoothedCx, smoothedCy);
+
+        if (isTripwireBreach) {
+          this.triggerLiveBreachAlert(existing.id, streamId, cand.score, videoElement, now);
+        }
+
         mappedResults.push({
-          id: targetId,
-          class: upperClass,
-          score,
+          id: existing.id,
+          class: existing.class,
+          score: cand.score,
           bbox: {
-            x: Math.round(smoothedBbox.x * 100) / 100,
-            y: Math.round(smoothedBbox.y * 100) / 100,
-            width: Math.round(smoothedBbox.width * 100) / 100,
-            height: Math.round(smoothedBbox.height * 100) / 100,
-            raw: videoRawBbox,
+            x: Math.round(smoothed.x * 100) / 100,
+            y: Math.round(smoothed.y * 100) / 100,
+            width: Math.round(smoothed.width * 100) / 100,
+            height: Math.round(smoothed.height * 100) / 100,
+            raw: cand.rawBbox,
           },
           isTripwireBreach,
           inferenceTimeMs,
-          anpr,
-          isVehicle,
+          anpr: anprRecord,
+          isVehicle: cand.isVehicle,
           isMoving,
           isSuspiciousStill,
           stillDurationSeconds,
           speedKmh,
           bearingLabel,
           engine: 'YOLOv8',
+          isCoasting: false,
         });
       }
+
+      // Spawn new tracks only for unassigned candidates that do NOT overlap with any active track
+      for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
+        if (assignedCandidates.has(cIdx)) continue;
+        const cand = candidates[cIdx];
+
+        // Guard: Check if any active track is within proximity
+        let isTooClose = false;
+        for (const track of activeTracks.values()) {
+          const isSameClass = track.class === cand.upperClass || (cand.isVehicle && VEHICLE_CLASSES.has(track.class));
+          if (isSameClass && Math.hypot(track.cx - cand.cx, track.cy - cand.cy) < 22) {
+            isTooClose = true;
+            break;
+          }
+        }
+        if (isTooClose) continue;
+
+        // Allocate new track
+        let newId: string;
+        if (cand.upperClass === 'PERSON') {
+          newId = `TGT-H${this.nextHumanId++}`;
+        } else if (cand.isVehicle) {
+          newId = `TGT-V${this.nextVehicleId++}`;
+        } else {
+          newId = `TGT-E${this.nextEntityId++}`;
+        }
+
+        const initialAnpr = cand.isVehicle ? anprService.recognizePlate(newId, cand.upperClass, cand.rawBbox, videoElement) : undefined;
+        if (initialAnpr) {
+          initialAnpr.speedKmh = 52;
+          initialAnpr.motionStatus = 'MOVING';
+          initialAnpr.bearing = 'EASTBOUND [E]';
+        }
+
+        const filter = new BBoxOneEuroFilter(0.7, 0.04);
+        const initialSmoothed = filter.filter(cand.normX, cand.normY, cand.normW, cand.normH, now);
+
+        const newTrack: ActiveTrack = {
+          id: newId,
+          class: cand.upperClass,
+          cx: cand.cx,
+          cy: cand.cy,
+          width: cand.normW,
+          height: cand.normH,
+          firstSeenMs: now,
+          lastSeenMs: now,
+          stationarySinceMs: null,
+          history: [{ cx: cand.cx, cy: cand.cy, time: now }],
+          score: cand.score,
+          anpr: initialAnpr,
+          isMoving: true,
+          isSuspiciousStill: false,
+          stillDurationSeconds: 0,
+          speedKmh: cand.isVehicle ? 52 : 5,
+          bearingLabel: 'ACQUIRING...',
+          frameSeenCount: 1,
+          missedFrames: 0,
+          bboxFilter: filter,
+          lastRawBbox: cand.rawBbox,
+        };
+
+        activeTracks.set(newId, newTrack);
+        matchedTrackIds.add(newId);
+
+        if (filterMode === 'MOVING_VEHICLES' && !cand.isVehicle) {
+          continue;
+        }
+
+        const isHuman = cand.upperClass === 'PERSON' || cand.upperClass === 'HUMAN';
+        const isTripwireBreach = isHuman && checkTargetFenceBreach(cand.cx, cand.cy);
+
+        if (isTripwireBreach) {
+          this.triggerLiveBreachAlert(newId, streamId, cand.score, videoElement, now);
+        }
+
+        mappedResults.push({
+          id: newId,
+          class: cand.upperClass,
+          score: cand.score,
+          bbox: {
+            x: Math.round(initialSmoothed.x * 100) / 100,
+            y: Math.round(initialSmoothed.y * 100) / 100,
+            width: Math.round(initialSmoothed.width * 100) / 100,
+            height: Math.round(initialSmoothed.height * 100) / 100,
+            raw: cand.rawBbox,
+          },
+          isTripwireBreach,
+          inferenceTimeMs,
+          anpr: initialAnpr,
+          isVehicle: cand.isVehicle,
+          isMoving: true,
+          isSuspiciousStill: false,
+          stillDurationSeconds: 0,
+          speedKmh: newTrack.speedKmh,
+          bearingLabel: newTrack.bearingLabel,
+          engine: 'YOLOv8',
+          isCoasting: false,
+        });
+      }
+
+      // Track Hysteresis / Anti-Flicker: Coast established tracks ONLY if no other track is in that spot
+      for (const [trackId, track] of activeTracks.entries()) {
+        if (!matchedTrackIds.has(trackId)) {
+          track.missedFrames += 1;
+
+          if (track.frameSeenCount >= 3 && track.missedFrames <= 3 && (now - track.lastSeenMs <= 380)) {
+            // Guard: Do not coast if a newly matched track is near this position
+            let isClashing = false;
+            for (const otherId of matchedTrackIds) {
+              const other = activeTracks.get(otherId);
+              if (other && Math.hypot(other.cx - track.cx, other.cy - track.cy) < 20) {
+                isClashing = true;
+                break;
+              }
+            }
+            if (isClashing) continue;
+
+            const isVehicle = VEHICLE_CLASSES.has(track.class);
+            if (filterMode === 'MOVING_VEHICLES' && (!isVehicle || (!track.isMoving && !track.isSuspiciousStill))) {
+              continue;
+            }
+
+            const currentX = track.cx - track.width / 2;
+            const currentY = track.cy - track.height / 2;
+            const smoothed = track.bboxFilter.filter(currentX, currentY, track.width, track.height, now);
+            const centerX = smoothed.x + smoothed.width / 2;
+            const centerY = smoothed.y + smoothed.height / 2;
+            const isHuman = track.class === 'PERSON' || track.class === 'HUMAN';
+            const isTripwireBreach = isHuman && checkTargetFenceBreach(centerX, centerY);
+
+            mappedResults.push({
+              id: track.id,
+              class: track.class,
+              score: Math.max(10, Math.round(track.score * 0.92)),
+              bbox: {
+                x: Math.round(smoothed.x * 100) / 100,
+                y: Math.round(smoothed.y * 100) / 100,
+                width: Math.round(smoothed.width * 100) / 100,
+                height: Math.round(smoothed.height * 100) / 100,
+                raw: track.lastRawBbox,
+              },
+              isTripwireBreach,
+              inferenceTimeMs,
+              anpr: track.anpr,
+              isVehicle,
+              isMoving: track.isMoving,
+              isSuspiciousStill: track.isSuspiciousStill,
+              stillDurationSeconds: track.stillDurationSeconds,
+              speedKmh: track.speedKmh,
+              bearingLabel: track.bearingLabel,
+              engine: 'YOLOv8',
+              isCoasting: true,
+            });
+          }
+        }
+      }
+
+      // Clean up stale tracks for this stream
+      this.pruneInactiveTracks(activeTracks, now);
 
       return mappedResults;
     } catch (err) {

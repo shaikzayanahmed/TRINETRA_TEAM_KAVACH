@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: Privacy / Face Anonymization
+TRINETRA — Edge Engine: Privacy / Face Anonymization
 Detects and blurs faces before evidence storage.
 """
 import logging
@@ -8,7 +8,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-logger = logging.getLogger("antigravity.privacy")
+logger = logging.getLogger("trinetra.privacy")
 
 
 class FaceAnonymizer:

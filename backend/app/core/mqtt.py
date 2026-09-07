@@ -1,7 +1,7 @@
 """
-ANTIGRAVITY — MQTT Client
+TRINETRA — MQTT Client
 Subscribes to edge engine events, publishes system events.
-Topics: antigravity/alerts, antigravity/detections, antigravity/cameras, antigravity/system
+Topics: trinetra/alerts, trinetra/detections, trinetra/cameras, trinetra/system
 """
 import asyncio
 import json
@@ -12,12 +12,12 @@ import paho.mqtt.client as mqtt
 
 from app.core.config import settings
 
-logger = logging.getLogger("antigravity.mqtt")
+logger = logging.getLogger("trinetra.mqtt")
 
-TOPIC_ALERTS = "antigravity/alerts"
-TOPIC_DETECTIONS = "antigravity/detections"
-TOPIC_CAMERAS = "antigravity/cameras"
-TOPIC_SYSTEM = "antigravity/system"
+TOPIC_ALERTS = "trinetra/alerts"
+TOPIC_DETECTIONS = "trinetra/detections"
+TOPIC_CAMERAS = "trinetra/cameras"
+TOPIC_SYSTEM = "trinetra/system"
 
 ALL_TOPICS = [TOPIC_ALERTS, TOPIC_DETECTIONS, TOPIC_CAMERAS, TOPIC_SYSTEM]
 
@@ -64,7 +64,7 @@ def get_mqtt_client() -> mqtt.Client:
     if _mqtt_client is None:
         _mqtt_client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-            client_id="antigravity-backend",
+            client_id="trinetra-backend",
             protocol=mqtt.MQTTv5,
         )
         _mqtt_client.on_connect = _on_connect

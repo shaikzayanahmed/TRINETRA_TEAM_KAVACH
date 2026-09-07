@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useLiveVision } from '../../hooks/useLiveVision';
 import { DetectionFilterMode } from '../../services/visionAiService';
 import { DetectionOverlay } from './DetectionOverlay';
+import { VirtualFenceOverlay } from './VirtualFenceOverlay';
 
 interface VideoStreamFeedProps {
   showDetection?: boolean;
@@ -55,29 +56,39 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Live Vision AI Object Detection + ANPR Hook
-  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine } = useLiveVision(videoRef, {
+  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine, providerDescription } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !!videoSrc && isPlaying,
-    detectionIntervalMs: 60,
+    detectionIntervalMs: 80,
     filterMode,
     minConfidence: 0.35,
+    streamId: 'CAM-STREAM-02',
   });
+
+  const oldBlobRef = useRef<string | null>(null);
 
   // Handle local video file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {
+        // ignore
+      }
+    }
+    setIsPlaying(false);
     setIsLoading(true);
     setHasError(null);
     setSelectedFileName(file.name);
 
     if (videoSrc && videoSrc.startsWith('blob:')) {
-      URL.revokeObjectURL(videoSrc);
+      oldBlobRef.current = videoSrc;
     }
 
     const objectUrl = URL.createObjectURL(file);
     setVideoSrc(objectUrl);
-    setIsLoading(false);
   };
 
   // Handle URL stream connection
@@ -90,7 +101,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
     setSelectedFileName(targetUrl.split('/').pop() || 'Network Stream');
 
     if (videoSrc && videoSrc.startsWith('blob:')) {
-      URL.revokeObjectURL(videoSrc);
+      oldBlobRef.current = videoSrc;
     }
 
     setVideoSrc(targetUrl);
@@ -126,6 +137,15 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   };
 
   const onLoadedMetadata = () => {
+    if (oldBlobRef.current) {
+      try {
+        URL.revokeObjectURL(oldBlobRef.current);
+      } catch {
+        // ignore
+      }
+      oldBlobRef.current = null;
+    }
+
     if (videoRef.current) {
       setDuration(videoRef.current.duration || 0);
       setIsLoading(false);
@@ -235,6 +255,14 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
             </div>
           </div>
 
+          {/* Configured PostGIS Virtual Tripwire / Geofence Overlay */}
+          {showDetection && (
+            <VirtualFenceOverlay
+              cameraId="CAM-LWIR-01"
+              isThermal={spectralFilter !== 'OPTICAL'}
+            />
+          )}
+
           {/* Real-time AI Detections & ANPR Badges Over Video */}
           {showDetection &&
             useLiveAi &&
@@ -242,8 +270,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
               <DetectionOverlay
                 key={det.id}
                 liveDetection={det}
-                isBreached={false}
-                isTripwireDisabled={true}
+                isBreached={det.isTripwireBreach}
                 isThermal={spectralFilter !== 'OPTICAL'}
               />
             ))}
@@ -532,12 +559,15 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
               </div>
             </div>
 
-            {/* Real-time AI Latency & Resolution Status */}
+            {/* Real-time AI Latency, GPU Acceleration & Resolution Status */}
             <div className="flex items-center gap-2 text-[10px]">
               {isModelReady && useLiveAi && (
-                <div className="flex items-center gap-1 text-secondary">
+                <div className="flex items-center gap-1.5 text-secondary">
                   <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
                   <span className="font-bold text-primary">{activeEngine || 'YOLOv8'}</span>
+                  <span className="px-1 py-0.2 rounded bg-secondary/20 text-secondary text-[8px] font-mono border border-secondary/40 font-bold uppercase">
+                    {providerDescription || 'GPU ACCELERATED'}
+                  </span>
                   <span>: {lastInferenceTimeMs || 10}ms ({fps || 15} FPS)</span>
                 </div>
               )}

@@ -1,21 +1,21 @@
 """
-ANTIGRAVITY — Alert Service
-Alert creation, deduplication, and processing.
+TRINETRA — Alert Service
+Business logic for alert processing, deduplication, auto-escalation, and dispatch.
 """
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, func, desc
 
 from app.models.alert import Alert, AlertType, AlertSeverity, AlertStatus
-from app.models.evidence import Evidence
-from app.core.redis_client import redis_check_alert_dedup, redis_set_json
-from app.core.config import settings
+from app.models.camera import Camera
+from app.schemas.common import AlertCreate, AlertUpdate
+from app.core.redis_client import redis_client
 
-logger = logging.getLogger("antigravity.alert")
+logger = logging.getLogger("trinetra.alert")
 
 
 async def create_alert_from_event(

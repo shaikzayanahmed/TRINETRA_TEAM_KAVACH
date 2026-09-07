@@ -12,7 +12,7 @@ if not db_url:
     if os.getenv("USE_POSTGRES", "false").lower() == "true":
         db_url = settings.SQLALCHEMY_DATABASE_URI
     else:
-        db_url = "sqlite+aiosqlite:///./antigravity.db"
+        db_url = "sqlite+aiosqlite:///./trinetra.db"
 
 # Create async engine
 engine = create_async_engine(

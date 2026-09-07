@@ -19,10 +19,15 @@ const YOLO_CLASSES = [
   'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ];
 
+export type ExecutionProviderType = 'webgpu' | 'webgl' | 'wasm';
+
 export class YoloService {
   private session: ort.InferenceSession | null = null;
   private isLoading: boolean = false;
   private isReady: boolean = false;
+  private isInferring: boolean = false;
+  private activeProvider: ExecutionProviderType = 'wasm';
+  private providerDescription: string = 'CPU (WASM SIMD)';
   private readonly inputWidth: number = 640;
   private readonly inputHeight: number = 640;
   private offscreenCanvas: HTMLCanvasElement | null = null;
@@ -40,9 +45,14 @@ export class YoloService {
         ort.env.wasm.wasmPaths = '/';
       }
       
-      const cores = typeof navigator !== 'undefined' ? Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1)) : 2;
+      const cores = typeof navigator !== 'undefined' ? Math.min(6, Math.max(1, (navigator.hardwareConcurrency || 4) - 1)) : 4;
       ort.env.wasm.numThreads = cores;
       ort.env.wasm.simd = true;
+
+      // Prioritize High-Performance Discrete GPU (NVIDIA GeForce GTX 1650 Ti / RTX)
+      if (ort.env && (ort.env as any).webgpu) {
+        (ort.env as any).webgpu.powerPreference = 'high-performance';
+      }
     } catch (e) {
       console.warn('ONNX environment initialization note:', e);
     }
@@ -56,20 +66,41 @@ export class YoloService {
     const defaultUrl = modelUrl || '/models/yolov8n.onnx';
 
     try {
-      console.log(`[YOLOv8 Engine] Loading model weights with hardware acceleration from: ${defaultUrl}`);
-      
-      // Initialize ONNX InferenceSession with WebGL GPU acceleration if available, falling back to multi-threaded WASM
+      console.log(`[YOLOv8 Engine] Initializing GPU accelerated inference pipeline from: ${defaultUrl}`);
+
+      // Attempt 1: WebGPU (DirectX 12 / Vulkan - Discrete NVIDIA GPU)
       try {
+        console.log('[YOLOv8 Engine] Attempting WebGPU high-performance GPU initialization...');
         this.session = await ort.InferenceSession.create(defaultUrl, {
-          executionProviders: ['webgl', 'wasm'],
+          executionProviders: ['webgpu'],
           graphOptimizationLevel: 'all',
         });
-      } catch {
-        // Fallback directly to multi-threaded WASM
-        this.session = await ort.InferenceSession.create(defaultUrl, {
-          executionProviders: ['wasm'],
-          graphOptimizationLevel: 'all',
-        });
+        this.activeProvider = 'webgpu';
+        this.providerDescription = 'NVIDIA GPU (WebGPU / DX12)';
+        console.log('🚀 [YOLOv8 Engine] WebGPU hardware accelerator engaged successfully!');
+      } catch (webgpuErr) {
+        console.warn('[YOLOv8 Engine] WebGPU unavailable, trying WebGL GPU shader fallback...', webgpuErr);
+
+        // Attempt 2: WebGL (GPU Accelerated)
+        try {
+          this.session = await ort.InferenceSession.create(defaultUrl, {
+            executionProviders: ['webgl'],
+            graphOptimizationLevel: 'all',
+          });
+          this.activeProvider = 'webgl';
+          this.providerDescription = 'GPU Accelerated (WebGL)';
+          console.log('⚡ [YOLOv8 Engine] WebGL GPU accelerator engaged successfully!');
+        } catch (webglErr) {
+          console.warn('[YOLOv8 Engine] WebGL unavailable, falling back to multi-threaded WASM SIMD...', webglErr);
+
+          // Attempt 3: Multi-threaded WASM SIMD (Optimized CPU)
+          this.session = await ort.InferenceSession.create(defaultUrl, {
+            executionProviders: ['wasm'],
+            graphOptimizationLevel: 'all',
+          });
+          this.activeProvider = 'wasm';
+          this.providerDescription = 'CPU (WASM SIMD Multi-Core)';
+        }
       }
 
       this.offscreenCanvas = document.createElement('canvas');
@@ -79,13 +110,21 @@ export class YoloService {
 
       this.isReady = true;
       this.isLoading = false;
-      console.log('✅ [YOLOv8 Engine] Ultralytics YOLOv8 ONNX model primed successfully!');
+      console.log(`✅ [YOLOv8 Engine] Ultralytics YOLOv8 ONNX model primed successfully on [${this.providerDescription}]!`);
       return true;
     } catch (err) {
       console.error('❌ [YOLOv8 Engine] Failed to load YOLOv8 model:', err);
       this.isLoading = false;
       return false;
     }
+  }
+
+  public getExecutionProvider(): ExecutionProviderType {
+    return this.activeProvider;
+  }
+
+  public getProviderDescription(): string {
+    return this.providerDescription;
   }
 
   public isModelLoaded(): boolean {
@@ -96,6 +135,17 @@ export class YoloService {
    * Preprocess video frame into YOLOv8 NCHW Float32 tensor using zero-allocation persistent buffers
    */
   private preprocess(video: HTMLVideoElement): ort.Tensor | null {
+    if (
+      !video ||
+      video.readyState < 2 ||
+      video.videoWidth <= 0 ||
+      video.videoHeight <= 0 ||
+      video.seeking ||
+      video.ended
+    ) {
+      return null;
+    }
+
     if (!this.offscreenCanvas || !this.offscreenCtx) {
       this.offscreenCanvas = document.createElement('canvas');
       this.offscreenCanvas.width = this.inputWidth;
@@ -106,25 +156,29 @@ export class YoloService {
     const ctx = this.offscreenCtx;
     if (!ctx) return null;
 
-    ctx.drawImage(video, 0, 0, this.inputWidth, this.inputHeight);
-    const imgData = ctx.getImageData(0, 0, this.inputWidth, this.inputHeight);
-    const { data } = imgData;
+    try {
+      ctx.drawImage(video, 0, 0, this.inputWidth, this.inputHeight);
+      const imgData = ctx.getImageData(0, 0, this.inputWidth, this.inputHeight);
+      const { data } = imgData;
 
-    const channelSize = this.inputWidth * this.inputHeight;
-    const floatData = this.inputTensorBuffer;
-    const rOffset = 0;
-    const gOffset = channelSize;
-    const bOffset = channelSize * 2;
-    const inv255 = 1.0 / 255.0;
+      const channelSize = this.inputWidth * this.inputHeight;
+      const floatData = this.inputTensorBuffer;
+      const rOffset = 0;
+      const gOffset = channelSize;
+      const bOffset = channelSize * 2;
+      const inv255 = 1.0 / 255.0;
 
-    // Fast single-pass normalization
-    for (let i = 0, p = 0; i < channelSize; i++, p += 4) {
-      floatData[rOffset + i] = data[p] * inv255;
-      floatData[gOffset + i] = data[p + 1] * inv255;
-      floatData[bOffset + i] = data[p + 2] * inv255;
+      // Fast single-pass normalization
+      for (let i = 0, p = 0; i < channelSize; i++, p += 4) {
+        floatData[rOffset + i] = data[p] * inv255;
+        floatData[gOffset + i] = data[p + 1] * inv255;
+        floatData[bOffset + i] = data[p + 2] * inv255;
+      }
+
+      return new ort.Tensor('float32', floatData, [1, 3, this.inputHeight, this.inputWidth]);
+    } catch (err) {
+      return null;
     }
-
-    return new ort.Tensor('float32', floatData, [1, 3, this.inputHeight, this.inputWidth]);
   }
 
   /**
@@ -135,8 +189,10 @@ export class YoloService {
     srcWidth: number,
     srcHeight: number,
     confThreshold: number = 0.35,
-    iouThreshold: number = 0.45
+    iouThreshold: number = 0.38
   ): YoloDetection[] {
+    if (!outputTensor || !outputTensor.data) return [];
+
     const data = outputTensor.data as Float32Array;
     const numCandidates = 8400;
     const numClasses = 80;
@@ -194,7 +250,7 @@ export class YoloService {
     // Sort by score descending
     boxes.sort((a, b) => b.score - a.score);
 
-    // Fast IoU Non-Maximum Suppression (NMS)
+    // Fast IoU & Containment Non-Maximum Suppression (NMS)
     const selected: YoloDetection[] = [];
     const suppressed = new Uint8Array(boxes.length);
 
@@ -208,15 +264,40 @@ export class YoloService {
         bbox: [b1.x, b1.y, b1.w, b1.h],
       });
 
-      if (selected.length >= 12) break; // Limit max HUD detections for clean display
+      if (selected.length >= 10) break; // Limit max HUD detections for clean display
+
+      const cx1 = b1.x + b1.w / 2;
+      const cy1 = b1.y + b1.h / 2;
+      const area1 = b1.w * b1.h;
 
       for (let j = i + 1; j < boxes.length; j++) {
         if (suppressed[j]) continue;
         const b2 = boxes[j];
 
+        const cx2 = b2.x + b2.w / 2;
+        const cy2 = b2.y + b2.h / 2;
+        const area2 = b2.w * b2.h;
+
+        const x1 = Math.max(b1.x, b2.x);
+        const y1 = Math.max(b1.y, b2.y);
+        const x2 = Math.min(b1.x + b1.w, b2.x + b2.w);
+        const y2 = Math.min(b1.y + b1.h, b2.y + b2.h);
+
+        const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+        const union = area1 + area2 - intersection;
+        const iou = union <= 0 ? 0 : intersection / union;
+
+        const minArea = Math.min(area1, area2);
+        const ios = minArea > 0 ? intersection / minArea : 0; // Intersection over smaller box
+
+        // Center proximity normalized by bounding box size
+        const maxDimension = Math.max(b1.w, b1.h, b2.w, b2.h);
+        const centerDist = Math.hypot(cx1 - cx2, cy1 - cy2);
+        const isCenterNested = maxDimension > 0 && centerDist / maxDimension < 0.35;
+
+        // Same-class suppression
         if (b1.classId === b2.classId) {
-          const iou = this.computeIoU(b1, b2);
-          if (iou > iouThreshold) {
+          if (iou > iouThreshold || ios > 0.50 || (isCenterNested && ios > 0.35)) {
             suppressed[j] = 1;
           }
         }
@@ -226,40 +307,41 @@ export class YoloService {
     return selected;
   }
 
-  private computeIoU(
-    b1: { x: number; y: number; w: number; h: number },
-    b2: { x: number; y: number; w: number; h: number }
-  ): number {
-    const x1 = Math.max(b1.x, b2.x);
-    const y1 = Math.max(b1.y, b2.y);
-    const x2 = Math.min(b1.x + b1.w, b2.x + b2.w);
-    const y2 = Math.min(b1.y + b1.h, b2.y + b2.h);
-
-    const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-    const area1 = b1.w * b1.h;
-    const area2 = b2.w * b2.h;
-    const union = area1 + area2 - intersection;
-
-    return union <= 0 ? 0 : intersection / union;
-  }
-
   public async detect(
     video: HTMLVideoElement,
     confThreshold: number = 0.35
   ): Promise<YoloDetection[]> {
-    if (!this.session || video.readyState < 2) return [];
+    if (
+      this.isInferring ||
+      !this.session ||
+      !video ||
+      video.readyState < 2 ||
+      video.videoWidth <= 0 ||
+      video.videoHeight <= 0 ||
+      video.seeking ||
+      video.ended ||
+      video.paused
+    ) {
+      return [];
+    }
 
-    const tensor = this.preprocess(video);
-    if (!tensor) return [];
+    this.isInferring = true;
+    let inputTensor: ort.Tensor | null = null;
+    let output: Record<string, ort.Tensor> | null = null;
 
     try {
+      inputTensor = this.preprocess(video);
+      if (!inputTensor) return [];
+
       const feeds: Record<string, ort.Tensor> = {};
       const inputName = this.session.inputNames[0] || 'images';
-      feeds[inputName] = tensor;
+      feeds[inputName] = inputTensor;
 
-      const output = await this.session.run(feeds);
+      output = await this.session.run(feeds);
       const outputName = this.session.outputNames[0] || 'output0';
       const outputTensor = output[outputName];
+
+      if (!outputTensor) return [];
 
       const srcWidth = video.videoWidth || 640;
       const srcHeight = video.videoHeight || 480;
@@ -268,6 +350,21 @@ export class YoloService {
     } catch (err) {
       console.warn('YOLO inference error:', err);
       return [];
+    } finally {
+      this.isInferring = false;
+      // Release WebGPU / WebGL / WASM tensors to prevent OOM memory leaks and browser tab crashes
+      try {
+        if (inputTensor) {
+          inputTensor.dispose?.();
+        }
+        if (output) {
+          for (const key in output) {
+            output[key]?.dispose?.();
+          }
+        }
+      } catch {
+        // Ignore dispose cleanup note
+      }
     }
   }
 }

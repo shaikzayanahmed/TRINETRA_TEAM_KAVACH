@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Zone API Routes (Tripwire / Geofence)
+TRINETRA — Zone API Routes (Tripwire / Geofence)
 """
 import uuid
 import logging
@@ -15,7 +15,7 @@ from app.models.user import User, UserRole
 from app.core.security import get_current_user, require_role
 from app.schemas.zone import ZoneCreate, ZoneUpdate, ZoneResponse
 
-logger = logging.getLogger("antigravity.api.zones")
+logger = logging.getLogger("trinetra.api.zones")
 router = APIRouter(prefix="/api/zones", tags=["Zones"])
 
 

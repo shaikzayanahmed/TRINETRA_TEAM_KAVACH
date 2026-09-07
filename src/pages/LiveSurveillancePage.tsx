@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Camera } from '../types';
+import { Link } from 'react-router-dom';
+import { Camera, VirtualFence } from '../types';
 import { apiService } from '../services/apiService';
 import { CameraPanel } from '../components/camera/CameraPanel';
 import { useDemo } from '../context/DemoContext';
+import { useAuth } from '../context/AuthContext';
 
 type SurveillanceViewMode = 'SPLIT' | 'CAM-RGB-01' | 'CAM-LWIR-01';
 
@@ -11,8 +13,18 @@ export const LiveSurveillancePage: React.FC = () => {
   const [showOverlays, setShowOverlays] = useState<boolean>(true);
   const [opticalFilter, setOpticalFilter] = useState<'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS'>('STANDARD');
   const [viewMode, setViewMode] = useState<SurveillanceViewMode>('SPLIT');
+  const [fences, setFences] = useState<VirtualFence[]>([]);
+  const [activeFenceId, setActiveFenceId] = useState<string>('VF-01');
 
   const { activeTarget, isFenceBreached, startDemo, isRunning } = useDemo();
+  const { isOperator, isAdmin } = useAuth();
+
+  const loadFences = async () => {
+    const list = await apiService.getVirtualFences();
+    setFences(list);
+    const active = apiService.getActiveFenceSync();
+    if (active) setActiveFenceId(active.id);
+  };
 
   useEffect(() => {
     const fetchCameras = async () => {
@@ -20,7 +32,27 @@ export const LiveSurveillancePage: React.FC = () => {
       setCameras(data);
     };
     fetchCameras();
+    loadFences();
+
+    const handleFenceUpdate = (e: any) => {
+      if (e.detail?.activeFence) {
+        setActiveFenceId(e.detail.activeFence.id);
+      }
+      if (e.detail?.allFences) {
+        setFences(e.detail.allFences);
+      } else {
+        loadFences();
+      }
+    };
+
+    window.addEventListener('trinetra_fence_updated', handleFenceUpdate);
+    return () => window.removeEventListener('trinetra_fence_updated', handleFenceUpdate);
   }, []);
+
+  const handleSwitchActiveFence = async (id: string) => {
+    await apiService.setActiveFence(id);
+    setActiveFenceId(id);
+  };
 
   // Listen for Escape key to restore dual view
   useEffect(() => {
@@ -107,6 +139,30 @@ export const LiveSurveillancePage: React.FC = () => {
             </button>
           </div>
 
+          {/* Active Database Stored Tripwire / Geofence Selector */}
+          <div className="flex items-center gap-1 bg-surface-container border border-surface-container-high rounded-lg p-1 text-[11px]">
+            <span className="material-symbols-outlined text-[14px] text-primary ml-1">fence</span>
+            <span className="text-outline text-[10px] uppercase font-bold hidden xl:inline">TRIPWIRE:</span>
+            <select
+              value={activeFenceId}
+              onChange={(e) => handleSwitchActiveFence(e.target.value)}
+              className="bg-surface-container-lowest text-on-surface border border-surface-container-high rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold focus:border-primary focus:outline-none cursor-pointer"
+            >
+              {fences.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.type || 'POLYGON'})
+                </option>
+              ))}
+            </select>
+            <Link
+              to="/virtual-fence"
+              title="Open Virtual Fence & Tripwire Studio to Edit / Calibrate"
+              className="p-1 rounded hover:bg-surface-container-high text-primary flex items-center justify-center transition-colors"
+            >
+              <span className="material-symbols-outlined text-[14px]">tune</span>
+            </Link>
+          </div>
+
           <button
             onClick={() => setShowOverlays((prev) => !prev)}
             className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
@@ -134,14 +190,21 @@ export const LiveSurveillancePage: React.FC = () => {
             ))}
           </div>
 
-          {!isRunning && (
-            <button
-              onClick={startDemo}
-              className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-              <span>TEST THREAT DETECTION</span>
-            </button>
+          {(isOperator || isAdmin) ? (
+            !isRunning && (
+              <button
+                onClick={startDemo}
+                className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                <span>TEST THREAT DETECTION</span>
+              </button>
+            )
+          ) : (
+            <div className="px-2.5 py-1 rounded-lg bg-surface-container border border-surface-container-high text-outline text-[11px] flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">visibility</span>
+              <span>LIVE MONITORING</span>
+            </div>
           )}
         </div>
       </div>
@@ -255,20 +318,31 @@ export const LiveSurveillancePage: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-2">
           <div className="flex items-center justify-between font-mono text-xs border-b border-surface-container-high/40 pb-1.5">
             <span className="font-bold text-on-surface uppercase">Active AI Lock</span>
-            <span className={activeTarget ? 'text-error font-bold' : 'text-secondary font-bold'}>
-              {activeTarget ? 'TARGET LOCKED' : 'SEARCHING'}
-            </span>
+            {isOperator || isAdmin ? (
+              <span className={activeTarget ? 'text-error font-bold' : 'text-secondary font-bold'}>
+                {activeTarget ? 'TARGET LOCKED' : 'SEARCHING'}
+              </span>
+            ) : (
+              <span className="text-outline font-bold">[OPERATOR ONLY]</span>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-1 font-mono text-[11px] text-outline">
-            <span>Target:</span>
-            <span className="text-right text-primary font-bold">{activeTarget ? activeTarget.id : 'NONE'}</span>
-            <span>Confidence:</span>
-            <span className="text-right text-secondary font-bold">{activeTarget ? `${activeTarget.confidence}%` : '---'}</span>
-            <span>Boundary State:</span>
-            <span className={`text-right font-bold ${isFenceBreached ? 'text-error animate-pulse' : 'text-secondary'}`}>
-              {isFenceBreached ? 'TRIPWIRE BREACH' : 'SECURE'}
-            </span>
-          </div>
+          {isOperator || isAdmin ? (
+            <div className="grid grid-cols-2 gap-1 font-mono text-[11px] text-outline">
+              <span>Target:</span>
+              <span className="text-right text-primary font-bold">{activeTarget ? activeTarget.id : 'NONE'}</span>
+              <span>Confidence:</span>
+              <span className="text-right text-secondary font-bold">{activeTarget ? `${activeTarget.confidence}%` : '---'}</span>
+              <span>Boundary State:</span>
+              <span className={`text-right font-bold ${isFenceBreached ? 'text-error animate-pulse' : 'text-secondary'}`}>
+                {isFenceBreached ? 'TRIPWIRE BREACH' : 'SECURE'}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1 py-1 font-mono text-[11px] text-outline">
+              <span className="text-outline">Target Telemetry: <strong className="text-on-surface">CLASSIFIED</strong></span>
+              <span className="text-[10px] text-outline">Target tracking vector requires Operator clearance.</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

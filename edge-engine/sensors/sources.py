@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: Video Source Abstraction
+TRINETRA — Edge Engine: Video Source Abstraction
 Supports: Webcam, MP4 file, RTSP stream, Thermal video.
 """
 import abc
@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-logger = logging.getLogger("antigravity.sensors")
+logger = logging.getLogger("trinetra.sensors")
 
 
 @dataclass

@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: Spatial Analysis
+TRINETRA — Edge Engine: Spatial Analysis
 Tripwire crossing, zone entry/exit, geofencing using Shapely.
 """
 import logging
@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 from shapely.geometry import Point, LineString, Polygon
 
-logger = logging.getLogger("antigravity.spatial")
+logger = logging.getLogger("trinetra.spatial")
 
 
 @dataclass

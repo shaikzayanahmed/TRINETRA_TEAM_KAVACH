@@ -7,13 +7,14 @@ export interface UseLiveVisionOptions {
   minConfidence?: number;
   detectionIntervalMs?: number;
   filterMode?: DetectionFilterMode;
+  streamId?: string;
 }
 
 export const useLiveVision = (
   videoRef: React.RefObject<HTMLVideoElement>,
   options: UseLiveVisionOptions = {}
 ) => {
-  const { enabled = true, detectionIntervalMs = 80, filterMode = 'MOVING_VEHICLES', minConfidence = 0.40 } = options;
+  const { enabled = true, detectionIntervalMs = 80, filterMode = 'MOVING_VEHICLES', minConfidence = 0.40, streamId = 'DEFAULT_STREAM' } = options;
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [isModelReady, setIsModelReady] = useState<boolean>(false);
   const [liveDetections, setLiveDetections] = useState<LiveDetectionResult[]>([]);
@@ -26,6 +27,7 @@ export const useLiveVision = (
   const lastFpsCheckRef = useRef<number>(performance.now());
 
   const [activeEngine, setActiveEngine] = useState<'YOLOv8'>('YOLOv8');
+  const [providerDescription, setProviderDescription] = useState<string>('NVIDIA GPU / WebGPU');
 
   // Load the model on mount
   useEffect(() => {
@@ -35,6 +37,7 @@ export const useLiveVision = (
       const ready = await visionAiService.loadModel();
       if (isMounted) {
         setIsModelReady(ready);
+        setProviderDescription(visionAiService.getProviderDescription());
         setIsModelLoading(false);
       }
     };
@@ -65,6 +68,11 @@ export const useLiveVision = (
       if (
         video &&
         video.readyState >= 2 &&
+        video.videoWidth > 0 &&
+        video.videoHeight > 0 &&
+        !video.paused &&
+        !video.ended &&
+        !video.seeking &&
         !isInferring &&
         now - lastInferenceTimestamp >= detectionIntervalMs
       ) {
@@ -72,7 +80,7 @@ export const useLiveVision = (
         lastInferenceTimestamp = now;
 
         try {
-          const results = await visionAiService.detect(video, { filterMode, minConfidence });
+          const results = await visionAiService.detect(video, { filterMode, minConfidence, streamId });
           if (!isCancelled) {
             setLiveDetections(results);
 
@@ -110,7 +118,7 @@ export const useLiveVision = (
       cancelAnimationFrame(animFrameId);
       isRunningRef.current = false;
     };
-  }, [enabled, videoRef, detectionIntervalMs, filterMode, minConfidence]);
+  }, [enabled, videoRef, detectionIntervalMs, filterMode, minConfidence, streamId]);
 
   useEffect(() => {
     if (isModelReady && enabled) {
@@ -129,5 +137,6 @@ export const useLiveVision = (
     fps,
     isDemoRunning,
     activeEngine,
+    providerDescription,
   };
 };

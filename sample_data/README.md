@@ -1,4 +1,4 @@
-# Sample Data for ANTIGRAVITY
+# Sample Data for TRINETRA
 
 ## Video Sources
 

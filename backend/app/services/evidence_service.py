@@ -1,6 +1,6 @@
 """
-ANTIGRAVITY — Evidence Service
-SHA-256 integrity, MinIO upload/download, verification.
+TRINETRA — Evidence Service
+Handling MinIO evidence upload, hash integrity check, and retrieval.
 """
 import hashlib
 import logging
@@ -13,7 +13,7 @@ from app.core.minio_client import (
     BUCKET_EVIDENCE,
 )
 
-logger = logging.getLogger("antigravity.evidence")
+logger = logging.getLogger("trinetra.evidence")
 
 
 def compute_sha256(data: bytes) -> str:

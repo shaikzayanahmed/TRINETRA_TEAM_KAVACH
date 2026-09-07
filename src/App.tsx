@@ -19,6 +19,8 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { DataFlowPage } from './pages/DataFlowPage';
 import { ReportsPage } from './pages/ReportsPage';
 
+import { RbacGuard } from './components/common/RbacGuard';
+
 export const App: React.FC = () => {
   return (
     <AuthProvider>
@@ -37,14 +39,53 @@ export const App: React.FC = () => {
               <Route path="/surveillance" element={<LiveSurveillancePage />} />
               <Route path="/map" element={<TacticalMapPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
-              <Route path="/targets" element={<TargetTrackingPage />} />
-              <Route path="/targets/:id" element={<TargetTrackingPage />} />
-              <Route path="/virtual-fence" element={<VirtualFencePage />} />
-              <Route path="/edge-node" element={<EdgeNodePage />} />
+              <Route
+                path="/targets"
+                element={
+                  <RbacGuard requiredRole="OPERATOR" fallbackTitle="TARGET INTELLIGENCE & TRACKING RESTRICTED" fallbackDescription="Target vector tracking, Kalman predictions, and optical telemetry are restricted to OPERATOR and ADMIN clearance levels.">
+                    <TargetTrackingPage />
+                  </RbacGuard>
+                }
+              />
+              <Route
+                path="/targets/:id"
+                element={
+                  <RbacGuard requiredRole="OPERATOR" fallbackTitle="TARGET INTELLIGENCE & TRACKING RESTRICTED" fallbackDescription="Target vector tracking, Kalman predictions, and optical telemetry are restricted to OPERATOR and ADMIN clearance levels.">
+                    <TargetTrackingPage />
+                  </RbacGuard>
+                }
+              />
+              
+              {/* Operator & Admin Authorized Modules */}
+              <Route
+                path="/virtual-fence"
+                element={
+                  <RbacGuard requiredRole="OPERATOR" fallbackTitle="VIRTUAL FENCE CALIBRATION LOCKED">
+                    <VirtualFencePage />
+                  </RbacGuard>
+                }
+              />
               <Route path="/evidence" element={<EvidenceVaultPage />} />
               <Route path="/environment" element={<EnvironmentalPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/data-flow" element={<DataFlowPage />} />
+              
+              {/* Admin (Commander) Exclusive Modules */}
+              <Route
+                path="/edge-node"
+                element={
+                  <RbacGuard requiredRole="ADMIN" fallbackTitle="HARDWARE & EDGE NODE MANAGEMENT RESTRICTED">
+                    <EdgeNodePage />
+                  </RbacGuard>
+                }
+              />
+              <Route
+                path="/data-flow"
+                element={
+                  <RbacGuard requiredRole="ADMIN" fallbackTitle="SYSTEM DATA PIPELINE CONTROL RESTRICTED">
+                    <DataFlowPage />
+                  </RbacGuard>
+                }
+              />
               <Route path="/reports" element={<ReportsPage />} />
             </Route>
 

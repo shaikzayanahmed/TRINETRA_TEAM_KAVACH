@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useDemo } from '../../context/DemoContext';
 import { useLiveVision } from '../../hooks/useLiveVision';
 import { DetectionOverlay } from './DetectionOverlay';
+import { VirtualFenceOverlay } from './VirtualFenceOverlay';
 
 interface WebcamFeedProps {
   showDetection?: boolean;
@@ -19,9 +20,11 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
   const { isDetectionVisible, activeTarget, isFenceBreached, isRunning: isDemoRunning } = useDemo();
 
   // Run real-time browser-accelerated YOLOv8 object detection
-  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine } = useLiveVision(videoRef, {
+  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine, providerDescription } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !isDemoRunning,
     filterMode: 'ALL_OBJECTS',
+    streamId: 'CAM-RGB-01',
+    detectionIntervalMs: 80,
   });
 
   const startWebcam = async () => {
@@ -119,11 +122,8 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
         </div>
       </div>
 
-      {/* Zone Alpha Virtual Tripwire Visual Boundary on Screen (Right 50%) */}
-      <div className="absolute right-0 top-0 bottom-0 w-[50%] border-l border-dashed border-primary/30 bg-primary/5 pointer-events-none flex flex-col justify-between p-2 font-mono text-[9px] text-primary/70">
-        <span className="self-end">[ ZONE ALPHA TRIPWIRE BOUNDARY ]</span>
-        <span className="self-end">SPATIAL HEURISTIC FILTER ACTIVE</span>
-      </div>
+      {/* Configured PostGIS Virtual Tripwire / Geofence Overlay */}
+      {showDetection && <VirtualFenceOverlay cameraId="CAM-RGB-01" isThermal={false} />}
 
       {/* Live AI Detections (Real Neural Network Running on Webcam) */}
       {hasPermission && hasLiveDetections && liveDetections.map((det) => (
@@ -182,6 +182,9 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
           <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-lowest/90 font-mono text-[10px] text-secondary border border-secondary/40 shadow-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
             <span className="font-bold text-primary">{activeEngine || 'YOLOv8'}</span>
+            <span className="px-1 py-0.2 rounded bg-secondary/20 text-secondary text-[8px] font-mono border border-secondary/40 font-bold uppercase">
+              {providerDescription || 'GPU ACCELERATED'}
+            </span>
             <span className="text-outline">·</span>
             <span>{lastInferenceTimeMs || 8}ms ({fps || 15} FPS)</span>
           </div>

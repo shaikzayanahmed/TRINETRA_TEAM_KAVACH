@@ -1,4 +1,4 @@
-# ANTIGRAVITY — Makefile
+# TRINETRA — Makefile
 # Development workflow commands
 
 .PHONY: up down build migrate seed test logs clean
@@ -17,15 +17,15 @@ build:
 
 # Run database migrations
 migrate:
-	docker exec antigravity-backend alembic upgrade head
+	docker exec trinetra-backend alembic upgrade head
 
 # Seed the database
 seed:
-	docker exec antigravity-backend python ../scripts/seed.py
+	docker exec trinetra-backend python ../scripts/seed.py
 
 # Run backend tests
 test:
-	docker exec antigravity-backend pytest tests/ -v
+	docker exec trinetra-backend pytest tests/ -v
 
 # View logs
 logs:
@@ -55,7 +55,7 @@ init:
 start: init up
 	@echo ""
 	@echo "═══════════════════════════════════════"
-	@echo "  ANTIGRAVITY is starting..."
+	@echo "  TRINETRA is starting..."
 	@echo "═══════════════════════════════════════"
 	@echo ""
 	@echo "  Frontend:  http://localhost:3000"

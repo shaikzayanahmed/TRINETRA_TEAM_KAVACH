@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Auth API Routes
+TRINETRA — Auth API Routes
 POST /api/auth/register
 POST /api/auth/login
 GET  /api/auth/me
@@ -22,7 +22,7 @@ from app.core.security import (
 )
 from app.schemas.auth import UserRegister, UserLogin, TokenResponse, UserResponse
 
-logger = logging.getLogger("antigravity.api.auth")
+logger = logging.getLogger("trinetra.api.auth")
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 

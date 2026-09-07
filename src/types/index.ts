@@ -43,6 +43,18 @@ export interface AnprRecord {
   bearing?: string;
   isAnalyzed?: boolean;
   evidenceId?: string;
+  plateBbox?: {
+    x: number; // percentage relative to vehicle bbox (0-100)
+    y: number; // percentage relative to vehicle bbox (0-100)
+    width: number; // percentage relative to vehicle bbox (0-100)
+    height: number; // percentage relative to vehicle bbox (0-100)
+  };
+  minioStorage?: {
+    bucket: string;
+    objectKey: string;
+    status: 'SEALED' | 'SYNCED' | 'QUEUED';
+    endpoint: string;
+  };
 }
 
 export interface Target {
@@ -72,6 +84,36 @@ export type AlertSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type AlertStatus = 'NEW' | 'ACKNOWLEDGED' | 'RESOLVED';
 export type AlertType = 'VIRTUAL_FENCE_BREACH' | 'LOITERING' | 'ANOMALOUS_MOTION' | 'SENSOR_TAMPER';
 
+export interface AlertTimelineEvent {
+  id: string;
+  timestamp: string;
+  timeMs?: number;
+  action:
+    | 'INITIAL_BREACH'
+    | 'RE_BREACH'
+    | 'ZONE_TRANSIT'
+    | 'LOITERING'
+    | 'EVIDENCE_RECORDED'
+    | 'TARGET_TRACKED'
+    | 'PTZ_TRACKING_LOCKED'
+    | 'AUDIO_WARNING_BROADCAST'
+    | 'QRF_VECTOR_DEPLOYED'
+    | 'SECTOR_LOCKDOWN_SEAL'
+    | string;
+  details: string;
+
+  confidence: number;
+  zone: string;
+  fenceId?: string;
+  fenceName?: string;
+  fenceType?: FenceGeometryType;
+  fencePoints?: VirtualFencePoint[];
+  evidenceId?: string;
+  videoClipUrl?: string;
+  snapshotUrl?: string;
+  coordinates?: { lat: number; lng: number };
+}
+
 export interface Alert {
   id: string;
   title: string;
@@ -85,30 +127,55 @@ export interface Alert {
   cameraId: string;
   zone: string;
   sector: string;
+  fenceId?: string;
+  fenceName?: string;
+  fenceType?: FenceGeometryType;
+  fencePreset?: string;
+  fencePoints?: VirtualFencePoint[];
   timestamp: string;
+  lastBreachTimestamp?: string;
+  breachCount?: number;
+  timeline?: AlertTimelineEvent[];
+  timelineTag?: string;
   resolvedAt?: string;
   resolvedBy?: string;
   evidenceId: string;
+  thumbnailUrl?: string;
+  zoneName?: string;
+  videoClipUrl?: string;
+  videoDurationSeconds?: number;
+  databaseStored?: boolean;
   sha256Hash: string;
 }
 
+
+export type FenceGeometryType = 'TRIPWIRE' | 'POLYGON' | '3D_SURROUNDING';
+export type FenceSourceTarget = 'CAM-RGB-01' | 'CAM-LWIR-01' | 'TACTICAL_MAP';
+
 export interface VirtualFencePoint {
-  x: number;
-  y: number;
-  lat: number;
-  lng: number;
+  x: number; // percentage in frame (0-100) or canvas pixel
+  y: number; // percentage in frame (0-100) or canvas pixel
+  lat?: number; // PostGIS WGS-84 Latitude
+  lng?: number; // PostGIS WGS-84 Longitude
+  label?: string;
 }
 
 export interface VirtualFence {
   id: string;
   name: string;
+  type?: FenceGeometryType;
+  sourceTarget?: FenceSourceTarget;
   status: 'ACTIVE' | 'INACTIVE' | 'CALIBRATING';
   sector: string;
   confidenceThreshold: number;
   assignedCameras: string[];
   points: VirtualFencePoint[];
+  heightMeters?: number; // For 3D volumetric virtual surrounding
+  postgisWkt?: string; // e.g. POLYGON((...)) or LINESTRING(...)
   breachCount: number;
   lastBreachTimestamp?: string;
+  color?: string;
+  direction?: 'BIDIRECTIONAL' | 'ENTRY_ONLY' | 'EXIT_ONLY';
 }
 
 export interface EdgeNode {
@@ -145,6 +212,10 @@ export interface Evidence {
   fileSizeKb: number;
   durationSeconds?: number;
   thumbnailUrl?: string;
+  videoClipUrl?: string;
+  videoBufferBase64?: string;
+  timeline?: AlertTimelineEvent[];
+  databaseStored?: boolean;
   plateCropUrl?: string;
   plateNumber?: string;
   vehicleColor?: string;
@@ -173,14 +244,19 @@ export interface AuditEvent {
   status: 'VERIFIED' | 'LOGGED' | 'FLAGGED';
 }
 
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'VIEWER' | 'SYSTEM_ADMIN' | 'TACTICAL_COMMANDER' | 'SECTOR_OPERATOR';
+
 export interface User {
   id: string;
+  username: string;
   callsign: string;
   name: string;
-  role: 'SECTOR_OPERATOR' | 'TACTICAL_COMMANDER' | 'SYSTEM_ADMIN';
+  email?: string;
+  role: UserRole;
   unit: string;
   sector: string;
-  securityClearance: 'RESTRICTED' | 'SECRET' | 'TOP_SECRET';
+  securityClearance: 'RESTRICTED' | 'CONFIDENTIAL' | 'SECRET' | 'TOP_SECRET';
+  databaseConnected?: boolean;
 }
 
 export interface DemoState {

@@ -1,12 +1,12 @@
 """
-ANTIGRAVITY — Edge Engine: Environmental Noise Filtering
+TRINETRA — Edge Engine: Environmental Noise Filtering
 Reduces false alerts from tiny movements, vegetation, intermittent/unstable detections.
 """
 import logging
 import time
 from typing import Dict, List, Optional, Tuple
 
-logger = logging.getLogger("antigravity.filters")
+logger = logging.getLogger("trinetra.filters")
 
 
 class NoiseFilter:

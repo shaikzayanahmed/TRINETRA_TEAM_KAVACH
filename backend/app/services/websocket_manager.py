@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — WebSocket Connection Manager
+TRINETRA — WebSocket Connection Manager
 Broadcasts real-time events to all connected dashboard clients.
 """
 import asyncio
@@ -9,7 +9,7 @@ from typing import List
 
 from fastapi import WebSocket
 
-logger = logging.getLogger("antigravity.ws")
+logger = logging.getLogger("trinetra.ws")
 
 
 class WebSocketManager:

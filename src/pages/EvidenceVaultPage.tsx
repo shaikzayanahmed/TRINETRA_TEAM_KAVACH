@@ -27,13 +27,28 @@ export const EvidenceVaultPage: React.FC = () => {
 
   useEffect(() => {
     fetchEvidence();
-    // Poll every 3 seconds to catch newly recorded live ANPR vehicle captures
+    // Poll every 3 seconds to catch newly recorded live breach snapshots and ANPR captures
     const timer = setInterval(() => {
       apiService.getEvidence().then((data) => {
         setEvidenceList(data);
       });
     }, 3000);
-    return () => clearInterval(timer);
+
+    const handleLiveBreach = (e: any) => {
+      if (e.detail?.evidence) {
+        setEvidenceList((prev) => [e.detail.evidence, ...prev.filter((item) => item.id !== e.detail.evidence.id)]);
+        setSelectedEvidence(e.detail.evidence);
+      }
+    };
+
+    window.addEventListener('trinetra_live_breach', handleLiveBreach);
+    window.addEventListener('trinetra_evidence_updated', fetchEvidence);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('trinetra_live_breach', handleLiveBreach);
+      window.removeEventListener('trinetra_evidence_updated', fetchEvidence);
+    };
   }, []);
 
   // Playback timer simulation
@@ -275,6 +290,24 @@ export const EvidenceVaultPage: React.FC = () => {
                       )}
                     </div>
                   </div>
+                ) : currentEvidence.videoClipUrl && currentEvidence.videoClipUrl.startsWith('blob:') ? (
+                  /* Real HTML5 Video Clip from Database */
+                  <video
+                    src={currentEvidence.videoClipUrl}
+                    controls
+                    autoPlay
+                    loop
+                    className="relative z-10 w-full h-full object-cover rounded"
+                  />
+                ) : currentEvidence.thumbnailUrl && currentEvidence.thumbnailUrl.startsWith('data:image') ? (
+                  /* Live Snapshot Keyframe Frame */
+                  <div className="relative z-10 w-full h-full flex flex-col items-center justify-center">
+                    <img
+                      src={currentEvidence.thumbnailUrl}
+                      alt="Breach Forensic Keyframe"
+                      className="max-h-full max-w-full object-contain rounded border border-primary/30"
+                    />
+                  </div>
                 ) : (
                   /* Center Play / Pause Icon Button for Non-vehicle clips */
                   <button
@@ -288,11 +321,11 @@ export const EvidenceVaultPage: React.FC = () => {
                 )}
 
                 <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-surface-container-lowest/80 font-mono text-[10px] text-outline border border-surface-container-high">
-                  RECORD: {currentEvidence.id} · DURATION: {currentEvidence.durationSeconds || 12}s
+                  RECORD: {currentEvidence.id} · DURATION: {currentEvidence.durationSeconds || 4}s
                 </div>
 
                 <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-surface-container-lowest/80 font-mono text-[10px] text-secondary border border-secondary/30">
-                  PRIVACY: DPDPA COMPLIANT
+                  DATABASE STORED · DPDPA COMPLIANT
                 </div>
 
                 {/* Video Playback Progress Bar */}
@@ -319,6 +352,32 @@ export const EvidenceVaultPage: React.FC = () => {
                   <span className="text-primary font-semibold">DPDPA 2023 SECURED</span>
                 </div>
               </div>
+
+              {/* Timeline Tag & Incursion Ladder (if single person alert has multi-events) */}
+              {currentEvidence.timeline && currentEvidence.timeline.length > 0 && (
+                <div className="p-3 rounded-lg bg-surface-container-lowest border border-primary/20 font-mono text-xs flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-primary font-bold flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[15px]">timeline</span>
+                      <span>TIMELINE HISTORY ({currentEvidence.timeline.length} EVENTS)</span>
+                    </span>
+                    <span className="text-[10px] text-secondary font-bold">[CONSOLIDATED RECORD]</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
+                    {currentEvidence.timeline.map((evt, idx) => (
+                      <div
+                        key={evt.id || idx}
+                        className="px-2.5 py-1 rounded bg-surface-container/50 border border-surface-container-high/40 flex items-center justify-between text-[11px]"
+                      >
+                        <span className="text-on-surface font-semibold">
+                          #{idx + 1} {evt.action.replace('_', ' ')} · {evt.zone}
+                        </span>
+                        <span className="text-outline text-[10px]">{evt.timestamp}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Cryptographic Metadata Details */}
               <div className="p-3.5 rounded-lg bg-surface-container-lowest shadow-tactical-inset grid grid-cols-2 gap-2 font-mono text-xs">
@@ -359,14 +418,23 @@ export const EvidenceVaultPage: React.FC = () => {
                 <span className="text-outline">Camera Source:</span>
                 <span className="text-right text-on-surface">{currentEvidence.cameraId}</span>
 
+                <span className="text-outline">MinIO Video Clip DB:</span>
+                <span className="text-right text-tertiary font-semibold flex items-center justify-end gap-1">
+                  <span className="material-symbols-outlined text-[14px]">cloud_done</span>
+                  <span>s3://trinetra-evidence/breaches/{currentEvidence.id}.webm</span>
+                </span>
+
+                <span className="text-outline">Redis Pub/Sub & Cache:</span>
+                <span className="text-right text-secondary font-semibold flex items-center justify-end gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                  <span>CACHED (TTL: 600s · Stream Synced)</span>
+                </span>
+
                 <span className="text-outline">Capture Location:</span>
                 <span className="text-right text-on-surface text-[11px] truncate">{currentEvidence.location}</span>
 
                 <span className="text-outline">Inference Confidence:</span>
                 <span className="text-right text-secondary font-bold">{currentEvidence.confidence}%</span>
-
-                <span className="text-outline">Privacy Anonymization:</span>
-                <span className="text-right text-secondary font-semibold">PROCESSED (Face / PII Redacted)</span>
 
                 <span className="text-outline">SHA-256 Digest:</span>
                 <span className="text-right text-outline text-[10px] font-mono break-all" title={currentEvidence.sha256Hash}>

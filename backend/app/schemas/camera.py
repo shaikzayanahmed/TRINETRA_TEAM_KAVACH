@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Pydantic Schemas: Camera
+TRINETRA — Pydantic Schemas: Camera
 """
 from typing import Optional
 from pydantic import BaseModel, Field
