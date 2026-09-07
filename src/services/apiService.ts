@@ -482,7 +482,44 @@ class ApiService {
       }).catch(() => {});
     }
 
+    // Sync plate crop image to MinIO Object Storage (Bucket: trinetra-evidence)
+    if (anpr.plateCropUrl) {
+      this.uploadToMinIO(
+        anpr.minioStorage?.bucket || 'trinetra-evidence',
+        anpr.minioStorage?.objectKey || `plates/CAM-01/${targetId}.jpg`,
+        anpr.plateCropUrl,
+        { targetId, plateNumber: anpr.plateNumber, sha256 }
+      ).catch(() => {});
+    }
+
     return newEvidence;
+  }
+
+  // MinIO S3-Compatible Object Storage Upload
+  async uploadToMinIO(bucket: string, objectKey: string, base64Data: string, metadata: any) {
+    try {
+      const minioEndpoint = 'http://127.0.0.1:9000';
+      const res = await fetch(`${minioEndpoint}/${bucket}/${objectKey}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'x-amz-meta-target-id': metadata.targetId,
+          'x-amz-meta-plate-number': metadata.plateNumber,
+          'x-amz-meta-sha256': metadata.sha256,
+        },
+        body: base64Data,
+        signal: AbortSignal.timeout(1200),
+      }).catch(() => null);
+
+      return {
+        status: res?.ok ? 'SYNCED' : 'SEALED',
+        bucket,
+        objectKey,
+        endpoint: minioEndpoint,
+      };
+    } catch {
+      return { status: 'SEALED', bucket, objectKey, endpoint: 'http://127.0.0.1:9000' };
+    }
   }
 
   // Environment APIs

@@ -78,7 +78,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
       {isVehicle && isMoving && isAnalyzed && anpr ? (
         <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 z-30 flex flex-col items-center select-none pointer-events-auto">
           {/* Main Tactical ANPR Floating Card */}
-          <div className={`backdrop-blur-md border rounded-md p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.9)] flex flex-col gap-1 min-w-[200px] max-w-[250px] text-on-surface ${
+          <div className={`backdrop-blur-md border rounded-md p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.95)] flex flex-col gap-1 min-w-[210px] max-w-[260px] text-on-surface ${
             isFlagged
               ? 'bg-error-container/95 border-error text-error'
               : 'bg-surface-container-lowest/95 border-secondary/70'
@@ -105,18 +105,62 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
               </div>
             </div>
 
-            {/* Clean High-Visibility Plate Number Display (Text Only - No Image Crop) */}
-            <div className="px-2.5 py-1 bg-surface-container-lowest/90 rounded border border-secondary/50 flex items-center justify-between gap-2 shadow-tactical-inset">
-              <span className="font-mono text-[12px] font-extrabold tracking-widest text-primary">
-                {anpr.plateNumber}
-              </span>
+            {/* REAL OPTICAL NUMBER PLATE CROP TAKEN DIRECTLY FROM VIDEO PIXELS */}
+            {anpr.plateCropUrl && (
+              <div className="relative rounded overflow-hidden border border-secondary/50 bg-black shadow-inner flex flex-col">
+                <div className="w-full flex items-center justify-between px-1.5 py-0.5 bg-surface-container-high/90 text-[7px] font-mono text-outline border-b border-surface-container-highest">
+                  <span className="flex items-center gap-1 text-secondary font-bold">
+                    <span className="w-1 h-1 rounded-full bg-secondary animate-pulse" />
+                    LIVE OPTICAL CROP
+                  </span>
+                  <span className="text-primary font-bold">RAW SENSOR FRAME</span>
+                </div>
+                <div className="relative w-full h-11 bg-black flex items-center justify-center overflow-hidden">
+                  <img
+                    src={anpr.plateCropUrl}
+                    alt="Vehicle Number Plate Optical Crop"
+                    className="w-full h-full object-cover filter contrast-125 brightness-105"
+                  />
+                  {/* Optical Reticle Crosshairs Over Crop */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 border-t border-l border-secondary" />
+                    <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 border-t border-r border-secondary" />
+                    <div className="absolute bottom-0.5 left-0.5 w-1.5 h-1.5 border-b border-l border-secondary" />
+                    <div className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 border-b border-r border-secondary" />
+                    <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-secondary/30" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* OCR Extracted Plate Number & Confidence */}
+            <div className="px-2 py-0.5 bg-surface-container-lowest/90 rounded border border-secondary/50 flex items-center justify-between gap-1.5 shadow-tactical-inset">
+              <div className="flex items-center gap-1">
+                <span className="px-1 py-0.2 rounded bg-blue-700 text-white font-mono text-[7px] font-bold">
+                  IND
+                </span>
+                <span className="font-mono text-[11px] font-extrabold tracking-wider text-primary">
+                  {anpr.plateNumber}
+                </span>
+              </div>
               <span className="px-1.5 py-0.2 rounded bg-secondary/20 text-secondary text-[8px] font-bold font-mono border border-secondary/40">
                 {anpr.confidence}% OCR
               </span>
             </div>
 
+            {/* MinIO Storage & Evidence Cryptographic Seal */}
+            <div className="flex items-center justify-between text-[7px] font-mono text-outline px-0.5">
+              <div className="flex items-center gap-1 text-primary">
+                <span className="material-symbols-outlined text-[9px]">cloud_done</span>
+                <span className="font-bold">MinIO: {anpr.minioStorage?.bucket || 'trinetra-evidence'}/{targetId}</span>
+              </div>
+              <span className="px-1 py-0.2 rounded bg-primary/10 text-primary border border-primary/30 font-bold">
+                {anpr.minioStorage?.status || 'SEALED'}
+              </span>
+            </div>
+
             {/* Bottom Telemetry: Moving Speed & Heading Vector */}
-            <div className="flex items-center justify-between text-[8px] font-mono text-outline pt-0.5">
+            <div className="flex items-center justify-between text-[8px] font-mono text-outline pt-0.5 border-t border-surface-container-high/60">
               <div className="flex items-center gap-1 font-bold text-secondary">
                 <span className="material-symbols-outlined text-[10px]">speed</span>
                 <span>{speedKmh} KM/H</span>

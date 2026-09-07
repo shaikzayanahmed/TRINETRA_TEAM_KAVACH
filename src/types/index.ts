@@ -49,6 +49,12 @@ export interface AnprRecord {
     width: number; // percentage relative to vehicle bbox (0-100)
     height: number; // percentage relative to vehicle bbox (0-100)
   };
+  minioStorage?: {
+    bucket: string;
+    objectKey: string;
+    status: 'SEALED' | 'SYNCED' | 'QUEUED';
+    endpoint: string;
+  };
 }
 
 export interface Target {
