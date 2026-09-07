@@ -6,6 +6,7 @@ import { POSTGRESQL_USERS } from '../services/authService';
 export const LoginPage: React.FC = () => {
   const [username, setUsername] = useState<string>('admin');
   const [password, setPassword] = useState<string>('admin123');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [selectedRoleTab, setSelectedRoleTab] = useState<'admin' | 'operator' | 'viewer'>('admin');
@@ -182,16 +183,24 @@ export const LoginPage: React.FC = () => {
             </label>
             <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
                 required
-                className="w-full px-3 py-2.5 rounded-lg bg-surface-container-lowest border border-surface-container-high text-on-surface placeholder:text-outline font-mono text-xs shadow-tactical-inset focus:outline-none focus:border-primary transition-all"
+                className="w-full pl-3 pr-10 py-2.5 rounded-lg bg-surface-container-lowest border border-surface-container-high text-on-surface placeholder:text-outline font-mono text-xs shadow-tactical-inset focus:outline-none focus:border-primary transition-all"
               />
-              <span className="material-symbols-outlined absolute right-3 top-2.5 text-outline text-[18px]">
-                lock
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                title={showPassword ? 'Hide security passkey' : 'Show security passkey'}
+                className="absolute right-2.5 top-2.5 p-0.5 rounded text-outline hover:text-primary transition-colors flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {showPassword ? 'visibility_off' : 'visibility'}
+                </span>
+              </button>
             </div>
           </div>
 
