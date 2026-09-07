@@ -88,8 +88,20 @@ export interface AlertTimelineEvent {
   id: string;
   timestamp: string;
   timeMs?: number;
-  action: 'INITIAL_BREACH' | 'RE_BREACH' | 'ZONE_TRANSIT' | 'LOITERING' | 'EVIDENCE_RECORDED' | 'TARGET_TRACKED';
+  action:
+    | 'INITIAL_BREACH'
+    | 'RE_BREACH'
+    | 'ZONE_TRANSIT'
+    | 'LOITERING'
+    | 'EVIDENCE_RECORDED'
+    | 'TARGET_TRACKED'
+    | 'PTZ_TRACKING_LOCKED'
+    | 'AUDIO_WARNING_BROADCAST'
+    | 'QRF_VECTOR_DEPLOYED'
+    | 'SECTOR_LOCKDOWN_SEAL'
+    | string;
   details: string;
+
   confidence: number;
   zone: string;
   fenceId?: string;
@@ -128,11 +140,14 @@ export interface Alert {
   resolvedAt?: string;
   resolvedBy?: string;
   evidenceId: string;
+  thumbnailUrl?: string;
+  zoneName?: string;
   videoClipUrl?: string;
   videoDurationSeconds?: number;
   databaseStored?: boolean;
   sha256Hash: string;
 }
+
 
 export type FenceGeometryType = 'TRIPWIRE' | 'POLYGON' | '3D_SURROUNDING';
 export type FenceSourceTarget = 'CAM-RGB-01' | 'CAM-LWIR-01' | 'TACTICAL_MAP';

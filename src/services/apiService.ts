@@ -552,9 +552,11 @@ class ApiService {
     const fencePoints = alertData.fencePoints || activeFence.points;
     const fencePreset = alertData.fencePreset || `${fenceName} (${fenceType})`;
     const targetId = alertData.targetId || 'TGT-2048';
-    const zone = alertData.zone || fenceName;
+    const zoneName = alertData.zoneName || alertData.zone || fenceName;
+    const zone = zoneName;
     const confidence = alertData.confidence || 97.4;
     const nowTime = alertData.timestamp || new Date().toLocaleTimeString();
+
 
     // Check if an alert for this target/person already exists
     const existingIndex = this.alerts.findIndex(
