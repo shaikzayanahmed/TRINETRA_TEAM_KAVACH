@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Alert, Detection, Track, Evidence, System API Routes
+TRINETRA — Alert, Detection, Track, Evidence, System API Routes
 """
 import uuid
 import logging
@@ -37,7 +37,7 @@ from app.schemas.common import (
     HealthResponse, SystemStatusResponse, SystemMetricsResponse,
 )
 
-logger = logging.getLogger("antigravity.api")
+logger = logging.getLogger("trinetra.api")
 
 
 
@@ -479,7 +479,7 @@ async def create_evidence(
 
     ev_id = uuid.uuid4()
     sha256_hash = payload.sha256
-    obj_path = f"antigravity-evidence/breaches/{ev_id}.jpg"
+    obj_path = f"trinetra-evidence/breaches/{ev_id}.jpg"
     raw_bytes = b""
 
     # Process base64 thumbnail/frame for direct MinIO Object Storage upload
@@ -498,7 +498,7 @@ async def create_evidence(
     elif not sha256_hash:
         raw_to_hash = (payload.thumbnail_data or payload.object_path or str(ev_id)).encode()
         sha256_hash = hashlib.sha256(raw_to_hash).hexdigest()
-        obj_path = payload.object_path or f"antigravity-evidence/breaches/{ev_id}.jpg"
+        obj_path = payload.object_path or f"trinetra-evidence/breaches/{ev_id}.jpg"
 
     ev = Evidence(
         id=ev_id,

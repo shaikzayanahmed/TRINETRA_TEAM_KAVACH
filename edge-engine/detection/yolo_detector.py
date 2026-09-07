@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: YOLO Object Detection
+TRINETRA — Edge Engine: YOLO Object Detection
 Uses Ultralytics YOLOv8 for real object detection.
 """
 import logging
@@ -9,7 +9,7 @@ from typing import List, Optional
 
 import numpy as np
 
-logger = logging.getLogger("antigravity.detection")
+logger = logging.getLogger("trinetra.detection")
 
 
 @dataclass

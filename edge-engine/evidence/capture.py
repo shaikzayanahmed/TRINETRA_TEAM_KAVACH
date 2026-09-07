@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: Evidence Capture
+TRINETRA — Edge Engine: Evidence Capture
 Frame capture, video clip extraction, SHA-256 hashing, MinIO upload.
 """
 import hashlib
@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-logger = logging.getLogger("antigravity.evidence")
+logger = logging.getLogger("trinetra.evidence")
 
 
 def compute_sha256(data: bytes) -> str:
@@ -67,7 +67,7 @@ def upload_to_minio(
         secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
 
         client = Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
-        bucket = "antigravity-evidence"
+        bucket = "trinetra-evidence"
 
         if not client.bucket_exists(bucket):
             client.make_bucket(bucket)

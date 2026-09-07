@@ -362,7 +362,7 @@ export const EvidenceVaultPage: React.FC = () => {
                 <span className="text-outline">MinIO Object Storage:</span>
                 <span className="text-right text-tertiary font-semibold flex items-center justify-end gap-1">
                   <span className="material-symbols-outlined text-[14px]">cloud_done</span>
-                  <span>s3://antigravity-evidence/breaches/{currentEvidence.id}.jpg</span>
+                  <span>s3://trinetra-evidence/breaches/{currentEvidence.id}.jpg</span>
                 </span>
 
                 <span className="text-outline">Redis Pub/Sub & Cache:</span>
@@ -374,7 +374,7 @@ export const EvidenceVaultPage: React.FC = () => {
                 <span className="text-outline">MQTT Alert Topic:</span>
                 <span className="text-right text-primary font-semibold flex items-center justify-end gap-1">
                   <span className="material-symbols-outlined text-[13px]">podcasts</span>
-                  <span>antigravity/alerts (QoS 1)</span>
+                  <span>trinetra/alerts (QoS 1)</span>
                 </span>
 
                 <span className="text-outline">Capture Location:</span>

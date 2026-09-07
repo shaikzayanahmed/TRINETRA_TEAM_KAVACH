@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: Main Processing Loop
+TRINETRA — Edge Engine: Main Processing Loop
 Complete CV pipeline: Video → Detect → Track → Spatial → Event → Evidence → MQTT
 
 Usage:
@@ -35,7 +35,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger("antigravity.edge")
+logger = logging.getLogger("trinetra.edge")
 
 
 def create_mqtt_client() -> mqtt.Client:
@@ -45,7 +45,7 @@ def create_mqtt_client() -> mqtt.Client:
 
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id="antigravity-edge-engine",
+        client_id="trinetra-edge-engine",
     )
 
     try:
@@ -139,7 +139,7 @@ def setup_simulation_zones(spatial: SpatialAnalyzer, frame_width: int, frame_hei
 def run_engine(args):
     """Main processing loop."""
     logger.info("=" * 60)
-    logger.info("  ANTIGRAVITY Edge Engine Starting...")
+    logger.info("  TRINETRA Edge Engine Starting...")
     logger.info(f"  Mode: {args.mode}")
     logger.info("=" * 60)
 
@@ -199,7 +199,7 @@ def run_engine(args):
     mqtt_client = create_mqtt_client()
 
     # Publish camera online status
-    publish_event(mqtt_client, "antigravity/cameras", {
+    publish_event(mqtt_client, "trinetra/cameras", {
         "camera_id": camera_id,
         "status": "ONLINE",
         "source_type": source_type,
@@ -273,7 +273,7 @@ def run_engine(args):
 
                 # Publish to MQTT
                 event_dict = event.to_dict()
-                publish_event(mqtt_client, "antigravity/alerts", event_dict)
+                publish_event(mqtt_client, "trinetra/alerts", event_dict)
 
                 meta_bytes = len(json.dumps(event_dict))
                 total_meta_bytes += meta_bytes
@@ -302,12 +302,12 @@ def run_engine(args):
                     "active_tracks": tracker.active_track_count,
                     "inference_fps": detector.inference_fps,
                 }
-                publish_event(mqtt_client, "antigravity/detections", detection_update)
+                publish_event(mqtt_client, "trinetra/detections", detection_update)
 
             # ── Step 8: System metrics (every 100 frames) ──
             if frame_count % 100 == 0:
                 reduction = ((total_raw_bytes - total_meta_bytes) / total_raw_bytes * 100) if total_raw_bytes > 0 else 0
-                publish_event(mqtt_client, "antigravity/system", {
+                publish_event(mqtt_client, "trinetra/system", {
                     "camera_id": camera_id,
                     "frame_count": frame_count,
                     "inference_fps": detector.inference_fps,
@@ -331,7 +331,7 @@ def run_engine(args):
         logger.info("Shutting down...")
     finally:
         # Cleanup
-        publish_event(mqtt_client, "antigravity/cameras", {
+        publish_event(mqtt_client, "trinetra/cameras", {
             "camera_id": camera_id,
             "status": "OFFLINE",
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -343,7 +343,7 @@ def run_engine(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="ANTIGRAVITY Edge Engine")
+    parser = argparse.ArgumentParser(description="TRINETRA Edge Engine")
     parser.add_argument("--mode", choices=["simulation", "live"], default="simulation",
                        help="Run mode: simulation (demo video) or live (real source)")
     parser.add_argument("--source", choices=["webcam", "file", "rtsp", "thermal"],

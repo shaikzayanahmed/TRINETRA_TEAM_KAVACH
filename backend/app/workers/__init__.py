@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — MQTT Worker
+TRINETRA — MQTT Worker
 Processes incoming events from edge engine, persists to DB, broadcasts via WebSocket.
 """
 import asyncio
@@ -12,7 +12,7 @@ from app.services.alert_service import create_alert_from_event
 from app.services.websocket_manager import ws_manager
 from app.core.redis_client import redis_set_json, redis_set_active_track
 
-logger = logging.getLogger("antigravity.mqtt_worker")
+logger = logging.getLogger("trinetra.mqtt_worker")
 
 
 async def process_alert_event(payload: dict) -> None:

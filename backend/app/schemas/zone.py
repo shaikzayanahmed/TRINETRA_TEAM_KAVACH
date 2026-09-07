@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Pydantic Schemas: Zone (Tripwire / Geofence)
+TRINETRA — Pydantic Schemas: Zone (Tripwire / Geofence)
 """
 from typing import Optional, List
 from pydantic import BaseModel, Field

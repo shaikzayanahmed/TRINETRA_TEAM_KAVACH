@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — MQTT Worker
+TRINETRA — MQTT Worker
 """
 from app.workers import (
     process_alert_event,

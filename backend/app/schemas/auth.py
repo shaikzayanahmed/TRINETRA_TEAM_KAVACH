@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Pydantic Schemas: Authentication
+TRINETRA — Pydantic Schemas: Authentication
 """
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field

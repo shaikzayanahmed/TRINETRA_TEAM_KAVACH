@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Edge Engine: Kalman Filter Multi-Object Tracker
+TRINETRA — Edge Engine: Kalman Filter Multi-Object Tracker
 Maintains persistent track IDs across frames using IoU-based association.
 """
 import logging
@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-logger = logging.getLogger("antigravity.tracking")
+logger = logging.getLogger("trinetra.tracking")
 
 
 @dataclass

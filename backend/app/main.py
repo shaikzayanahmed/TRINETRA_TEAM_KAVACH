@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — FastAPI Application
+TRINETRA — FastAPI Application
 Edge-AI Surveillance & Tactical Threat Interception Backend
 """
 import logging
@@ -30,7 +30,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger("antigravity")
+logger = logging.getLogger("trinetra")
 
 
 # ── MQTT event handler (runs in MQTT thread) ──
@@ -54,7 +54,7 @@ def _handle_alert_event(topic: str, payload: dict):
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     logger.info("=" * 60)
-    logger.info("  ANTIGRAVITY Backend Starting...")
+    logger.info("  TRINETRA Backend Starting...")
     logger.info("=" * 60)
 
     # Initialize Redis / in-memory cache
@@ -82,13 +82,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.info(f"[!] MQTT disabled in standalone mode: {e}")
 
-    logger.info("[✓] ANTIGRAVITY Backend ready")
+    logger.info("[✓] TRINETRA Backend ready")
     logger.info(f"    API docs: http://localhost:{settings.BACKEND_PORT}/docs")
 
     yield
 
     # ── Shutdown ──
-    logger.info("ANTIGRAVITY Backend shutting down...")
+    logger.info("TRINETRA Backend shutting down...")
     try:
         stop_mqtt()
     except Exception:
@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
 
 # ── App ──
 app = FastAPI(
-    title="ANTIGRAVITY",
+    title="TRINETRA",
     description="Edge-AI Surveillance & Tactical Threat Interception API",
     version="1.0.0",
     lifespan=lifespan,

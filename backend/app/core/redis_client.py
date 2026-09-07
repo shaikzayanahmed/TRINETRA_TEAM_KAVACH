@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Redis Client
+TRINETRA — Redis Client
 Real-time ephemeral state: active tracks, alert dedup, dashboard state.
 Includes automatic in-memory fallback if Redis daemon is not running.
 """
@@ -12,7 +12,7 @@ import redis.asyncio as aioredis
 
 from app.core.config import settings
 
-logger = logging.getLogger("antigravity.redis")
+logger = logging.getLogger("trinetra.redis")
 
 _redis_client: Optional[aioredis.Redis] = None
 _redis_available: Optional[bool] = None

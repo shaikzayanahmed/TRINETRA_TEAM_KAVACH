@@ -1,4 +1,4 @@
--- ANTIGRAVITY - PostgreSQL Initialization
+-- TRINETRA - PostgreSQL Initialization
 -- Enable PostGIS extension for geospatial support
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS postgis_topology;

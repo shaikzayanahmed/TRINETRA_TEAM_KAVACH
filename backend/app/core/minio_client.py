@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Object Storage Client (MinIO / Local Disk Fallback)
+TRINETRA — Object Storage Client (MinIO / Local Disk Fallback)
 Stores: alert images, evidence frames, video clips, thermal evidence.
 """
 import io
@@ -14,11 +14,11 @@ from minio.error import S3Error
 
 from app.core.config import settings
 
-logger = logging.getLogger("antigravity.minio")
+logger = logging.getLogger("trinetra.minio")
 
-BUCKET_EVIDENCE = "antigravity-evidence"
-BUCKET_ALERTS = "antigravity-alerts"
-BUCKET_LOGS = "antigravity-logs"
+BUCKET_EVIDENCE = "trinetra-evidence"
+BUCKET_ALERTS = "trinetra-alerts"
+BUCKET_LOGS = "trinetra-logs"
 
 _minio_client: Optional[Minio] = None
 _minio_available: Optional[bool] = None

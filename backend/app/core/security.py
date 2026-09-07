@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — JWT Authentication & RBAC Security
+TRINETRA — JWT Authentication & RBAC Security
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional

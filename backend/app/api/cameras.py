@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Camera API Routes
+TRINETRA — Camera API Routes
 Full CRUD for camera management.
 """
 import uuid
@@ -16,7 +16,7 @@ from app.models.user import User, UserRole
 from app.core.security import get_current_user, require_role
 from app.schemas.camera import CameraCreate, CameraUpdate, CameraResponse
 
-logger = logging.getLogger("antigravity.api.cameras")
+logger = logging.getLogger("trinetra.api.cameras")
 router = APIRouter(prefix="/api/cameras", tags=["Cameras"])
 
 

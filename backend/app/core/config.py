@@ -5,7 +5,7 @@ from pydantic_core import MultiHostUrl
 
 class Settings(BaseSettings):
     """
-    ANTIGRAVITY — Central configuration.
+    TRINETRA — Central configuration.
     All values are loaded from environment variables / .env file.
     """
 

@@ -1,5 +1,5 @@
 """
-Antigravity - Database Connection Test Script
+Trinetra - Database Connection Test Script
 ==============================================
 Verifies that the async PostgreSQL connection works and PostGIS is available.
 
@@ -27,7 +27,7 @@ async def test_connection():
 
     db_url = os.getenv(
         "DATABASE_URL",
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/antigravity",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/trinetra_db",
     )
 
     print(f"[*] Connecting to: {db_url}")

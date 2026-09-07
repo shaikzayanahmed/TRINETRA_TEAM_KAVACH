@@ -1,5 +1,5 @@
 """
-Antigravity - Database Seed Script
+Trinetra - Database Seed Script
 ====================================
 Seeds the database with demo data for development.
 """

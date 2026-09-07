@@ -698,13 +698,13 @@ class ApiService {
         camera_id: cameraId,
         track_id: targetId,
         hash: sha256,
-        evidence_path: `antigravity-evidence/breaches/${evidenceId}.jpg`,
+        evidence_path: `trinetra-evidence/breaches/${evidenceId}.jpg`,
         metadata: {
           zone_name: zoneName,
           description: `Virtual Tripwire Boundary Breach at ${zoneName}`,
-          mqtt_topic: 'antigravity/alerts',
+          mqtt_topic: 'trinetra/alerts',
           redis_cached: true,
-          minio_bucket: 'antigravity-evidence',
+          minio_bucket: 'trinetra-evidence',
         },
       }),
     }).catch(() => {});
@@ -722,10 +722,10 @@ class ApiService {
       }),
     }).catch(() => {});
 
-    // 3. Directly sync binary frame to MinIO S3 bucket (antigravity-evidence / trinetra-evidence)
+    // 3. Directly sync binary frame to MinIO S3 bucket (trinetra-evidence)
     if (breachData?.snapshotBase64) {
       this.uploadToMinIO(
-        'antigravity-evidence',
+        'trinetra-evidence',
         `breaches/${evidenceId}.jpg`,
         breachData.snapshotBase64,
         { targetId, alertId, sha256, zoneName }

@@ -1,5 +1,5 @@
 """
-ANTIGRAVITY — Pydantic Schemas: Alert, Detection, Track, Evidence, System
+TRINETRA — Pydantic Schemas: Alert, Detection, Track, Evidence, System
 """
 from typing import Optional, List, Any
 from pydantic import BaseModel, Field
@@ -126,7 +126,7 @@ class EvidenceResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-    service: str = "antigravity-backend"
+    service: str = "trinetra-backend"
     version: str = "1.0.0"
 
 
