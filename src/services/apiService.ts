@@ -28,11 +28,38 @@ class ApiService {
   private cameras: Camera[] = [...MOCK_CAMERAS];
   private targets: Target[] = [...MOCK_TARGETS];
   private alerts: Alert[] = this.loadStoredAlerts();
-  private fences: VirtualFence[] = [{ ...MOCK_VIRTUAL_FENCE }];
+  private fences: VirtualFence[] = this.loadStoredFences();
   private edgeNodes: EdgeNode[] = [{ ...MOCK_EDGE_NODE }];
   private evidence: Evidence[] = this.loadStoredEvidence();
   private environment: EnvironmentStatus = { ...MOCK_ENVIRONMENT };
   private auditEvents: AuditEvent[] = [...MOCK_AUDIT_EVENTS];
+
+  private loadStoredFences(): VirtualFence[] {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('trinetra_virtual_fences');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load stored fences:', e);
+    }
+    return [{ ...MOCK_VIRTUAL_FENCE }];
+  }
+
+  private saveStoredFences() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('trinetra_virtual_fences', JSON.stringify(this.fences));
+      }
+    } catch (e) {
+      console.warn('Failed to save fences to localStorage:', e);
+    }
+  }
 
 
   private loadStoredEvidence(): Evidence[] {
@@ -359,8 +386,39 @@ class ApiService {
     const fence = this.fences.find((f) => f.id === id);
     if (fence) {
       fence.status = status;
+      this.saveStoredFences();
     }
     return fence;
+  }
+
+  async saveVirtualFence(fenceData: VirtualFence): Promise<VirtualFence> {
+    const existingIndex = this.fences.findIndex((f) => f.id === fenceData.id);
+    if (existingIndex >= 0) {
+      this.fences[existingIndex] = { ...fenceData };
+    } else {
+      this.fences.unshift({ ...fenceData });
+    }
+    this.saveStoredFences();
+
+    // Sync to PostgreSQL / PostGIS backend REST API
+    try {
+      await fetch(`${BACKEND_BASE_URL}/zones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fenceData.name,
+          camera_id: fenceData.assignedCameras?.[0] || 'CAM-RGB-01',
+          zone_type: fenceData.type || 'POLYGON',
+          coordinates: fenceData.points.map((p) => [p.lat || 34.2911, p.lng || 77.7533]),
+          enabled: fenceData.status === 'ACTIVE',
+        }),
+        signal: AbortSignal.timeout(1500),
+      });
+    } catch (e) {
+      // Offline fallback persisted in localStorage
+    }
+
+    return fenceData;
   }
 
   // Edge Node APIs

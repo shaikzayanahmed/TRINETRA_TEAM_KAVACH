@@ -104,23 +104,33 @@ export interface Alert {
   sha256Hash: string;
 }
 
+export type FenceGeometryType = 'TRIPWIRE' | 'POLYGON' | '3D_SURROUNDING';
+export type FenceSourceTarget = 'CAM-RGB-01' | 'CAM-LWIR-01' | 'TACTICAL_MAP';
+
 export interface VirtualFencePoint {
-  x: number;
-  y: number;
-  lat: number;
-  lng: number;
+  x: number; // percentage in frame (0-100) or canvas pixel
+  y: number; // percentage in frame (0-100) or canvas pixel
+  lat?: number; // PostGIS WGS-84 Latitude
+  lng?: number; // PostGIS WGS-84 Longitude
+  label?: string;
 }
 
 export interface VirtualFence {
   id: string;
   name: string;
+  type?: FenceGeometryType;
+  sourceTarget?: FenceSourceTarget;
   status: 'ACTIVE' | 'INACTIVE' | 'CALIBRATING';
   sector: string;
   confidenceThreshold: number;
   assignedCameras: string[];
   points: VirtualFencePoint[];
+  heightMeters?: number; // For 3D volumetric virtual surrounding
+  postgisWkt?: string; // e.g. POLYGON((...)) or LINESTRING(...)
   breachCount: number;
   lastBreachTimestamp?: string;
+  color?: string;
+  direction?: 'BIDIRECTIONAL' | 'ENTRY_ONLY' | 'EXIT_ONLY';
 }
 
 export interface EdgeNode {
