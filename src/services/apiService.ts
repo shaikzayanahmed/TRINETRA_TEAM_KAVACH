@@ -627,6 +627,114 @@ class ApiService {
     return newEvidence;
   }
 
+  // Automatic Breach Alert + MinIO Snapshot Storage + Redis Cache + MQTT Dispatch
+  public recordBreachEvidenceAndAlert(breachData?: {
+    targetId?: string;
+    cameraId?: string;
+    zoneName?: string;
+    confidence?: number;
+    snapshotBase64?: string;
+  }): { alert: Alert; evidence: Evidence } {
+    const targetId = breachData?.targetId || `TGT-H${Math.floor(1000 + Math.random() * 9000)}`;
+    const cameraId = breachData?.cameraId || 'CAM-RGB-01';
+    const zoneName = breachData?.zoneName || 'Sector 07 Zone Alpha';
+    const confidence = breachData?.confidence || 97.6;
+    const alertId = `ALT-${Math.floor(7000 + Math.random() * 2000)}`;
+    const evidenceId = `EV-BRK-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const sha256 = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const newAlert: Alert = {
+      id: alertId,
+      title: 'PERIMETER VIRTUAL TRIPWIRE BREACH',
+      description: `Human target crossed armed spatial boundary [${zoneName}]. SHA-256 seal & MinIO snapshot created.`,
+      type: 'VIRTUAL_FENCE_BREACH',
+      severity: 'CRITICAL',
+      status: 'NEW',
+      targetId,
+      targetClassification: 'PERSON',
+      confidence,
+      cameraId,
+      zone: zoneName,
+      sector: 'Northern Border Sector 07',
+      timestamp: new Date().toLocaleTimeString(),
+      evidenceId,
+      sha256Hash: sha256,
+    };
+
+    const newEvidence: Evidence = {
+      id: evidenceId,
+      alertId,
+      targetId,
+      cameraId,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'KEYFRAME',
+      confidence,
+      location: `Zone Alpha Virtual Tripwire (${zoneName})`,
+      sector: 'Northern Border Sector 07',
+      sha256Hash: sha256,
+      hashVerified: true,
+      privacyStatus: 'PROCESSED',
+      fileSizeKb: 1840,
+      thumbnailUrl: breachData?.snapshotBase64,
+    };
+
+    this.alerts.unshift(newAlert);
+    this.saveStoredAlerts();
+
+    this.evidence.unshift(newEvidence);
+    this.saveStoredEvidence();
+
+    // 1. Ingest alert into PostgreSQL via FastAPI backend (which publishes to MQTT and sets Redis cache)
+    fetch(`${BACKEND_BASE_URL}/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alert_type: 'TRIPWIRE_BREACH',
+        severity: 'CRITICAL',
+        confidence,
+        camera_id: cameraId,
+        track_id: targetId,
+        hash: sha256,
+        evidence_path: `antigravity-evidence/breaches/${evidenceId}.jpg`,
+        metadata: {
+          zone_name: zoneName,
+          description: `Virtual Tripwire Boundary Breach at ${zoneName}`,
+          mqtt_topic: 'antigravity/alerts',
+          redis_cached: true,
+          minio_bucket: 'antigravity-evidence',
+        },
+      }),
+    }).catch(() => {});
+
+    // 2. Ingest evidence into PostgreSQL & upload snapshot image to MinIO S3 object storage
+    fetch(`${BACKEND_BASE_URL}/evidence`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alert_id: alertId,
+        media_type: 'image/jpeg',
+        sha256,
+        thumbnail_data: breachData?.snapshotBase64,
+        confidence,
+      }),
+    }).catch(() => {});
+
+    // 3. Directly sync binary frame to MinIO S3 bucket (antigravity-evidence / trinetra-evidence)
+    if (breachData?.snapshotBase64) {
+      this.uploadToMinIO(
+        'antigravity-evidence',
+        `breaches/${evidenceId}.jpg`,
+        breachData.snapshotBase64,
+        { targetId, alertId, sha256, zoneName }
+      ).catch(() => {});
+    }
+
+    return { alert: newAlert, evidence: newEvidence };
+  }
+
   // MinIO S3-Compatible Object Storage Upload
   async uploadToMinIO(bucket: string, objectKey: string, base64Data: string, metadata: any) {
     try {

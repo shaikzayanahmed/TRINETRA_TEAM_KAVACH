@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import base64
+import json
 import hashlib
 from datetime import datetime, timezone
 
@@ -22,7 +24,9 @@ from app.models.camera import Camera
 from app.models.audit_log import AuditLog
 from app.models.user import User, UserRole
 from app.core.security import get_current_user, require_role
-from app.core.redis_client import redis_get_system_metrics, get_redis
+from app.core.redis_client import redis_get_system_metrics, get_redis, redis_set_json
+from app.core.minio_client import upload_bytes, BUCKET_EVIDENCE
+from app.core.mqtt import get_mqtt_client, TOPIC_ALERTS, TOPIC_SYSTEM
 from app.services.evidence_service import verify_evidence, get_evidence_url
 from app.services.alert_service import acknowledge_alert
 from app.services.websocket_manager import ws_manager
@@ -136,6 +140,31 @@ async def create_alert(
     await db.commit()
     await db.refresh(alert)
 
+    # Cache in Redis real-time store
+    try:
+        await redis_set_json(f"alerts:latest:{alert.id}", _alert_to_response(alert).dict(), ttl=600)
+        await redis_set_json(f"alerts:camera:{alert.camera_id}:latest", str(alert.id), ttl=300)
+    except Exception as e:
+        logger.debug(f"Redis alert cache notice: {e}")
+
+    # Publish alert event to MQTT Broker
+    try:
+        mqtt_client = get_mqtt_client()
+        mqtt_payload = json.dumps({
+            "event": "ALERT_CREATED",
+            "alert_id": str(alert.id),
+            "alert_type": alert.alert_type.value,
+            "severity": alert.severity.value,
+            "camera_id": str(alert.camera_id),
+            "confidence": alert.confidence,
+            "hash": alert.hash,
+            "timestamp": alert.timestamp.isoformat(),
+        })
+        mqtt_client.publish(TOPIC_ALERTS, mqtt_payload, qos=1)
+        logger.info(f"MQTT dispatched alert to {TOPIC_ALERTS}: {alert.id}")
+    except Exception as e:
+        logger.warning(f"MQTT publish warning: {e}")
+
     # Broadcast to WebSocket
     try:
         await ws_manager.broadcast("alert", {
@@ -146,6 +175,7 @@ async def create_alert(
             "timestamp": alert.timestamp.isoformat(),
             "confidence": alert.confidence,
             "status": alert.status.value,
+            "hash": alert.hash,
         })
     except Exception:
         pass
@@ -447,23 +477,69 @@ async def create_evidence(
             await db.flush()
             alert_id = new_alert.id
 
+    ev_id = uuid.uuid4()
     sha256_hash = payload.sha256
-    if not sha256_hash:
-        raw_to_hash = (payload.thumbnail_data or payload.object_path or str(uuid.uuid4())).encode()
-        sha256_hash = hashlib.sha256(raw_to_hash).hexdigest()
+    obj_path = f"antigravity-evidence/breaches/{ev_id}.jpg"
+    raw_bytes = b""
 
-    obj_path = payload.thumbnail_data or payload.object_path or f"storage/evidence/{uuid.uuid4()}.jpg"
+    # Process base64 thumbnail/frame for direct MinIO Object Storage upload
+    if payload.thumbnail_data and payload.thumbnail_data.startswith("data:image"):
+        try:
+            header, encoded = payload.thumbnail_data.split(",", 1)
+            raw_bytes = base64.b64decode(encoded)
+            sha256_hash = hashlib.sha256(raw_bytes).hexdigest()
+            obj_path = upload_bytes(BUCKET_EVIDENCE, f"breaches/{ev_id}.jpg", raw_bytes, "image/jpeg")
+            logger.info(f"Evidence frame successfully uploaded to MinIO: {obj_path}")
+        except Exception as e:
+            logger.warning(f"MinIO base64 upload notice: {e}")
+            raw_bytes = payload.thumbnail_data.encode()
+            sha256_hash = hashlib.sha256(raw_bytes).hexdigest()
+            obj_path = payload.thumbnail_data
+    elif not sha256_hash:
+        raw_to_hash = (payload.thumbnail_data or payload.object_path or str(ev_id)).encode()
+        sha256_hash = hashlib.sha256(raw_to_hash).hexdigest()
+        obj_path = payload.object_path or f"antigravity-evidence/breaches/{ev_id}.jpg"
 
     ev = Evidence(
-        id=uuid.uuid4(),
+        id=ev_id,
         alert_id=alert_id,
         object_path=obj_path,
-        media_type=payload.media_type,
+        media_type=payload.media_type or "image/jpeg",
         sha256=sha256_hash,
     )
     db.add(ev)
     await db.commit()
     await db.refresh(ev)
+
+    # Cache Evidence in Redis
+    try:
+        await redis_set_json(f"evidence:latest:{ev.id}", {
+            "evidence_id": str(ev.id),
+            "alert_id": str(ev.alert_id),
+            "object_path": ev.object_path,
+            "sha256": ev.sha256,
+            "timestamp": ev.created_at.isoformat(),
+        }, ttl=600)
+    except Exception:
+        pass
+
+    # Publish evidence ingestion event to MQTT Broker
+    try:
+        mqtt_client = get_mqtt_client()
+        mqtt_client.publish(
+            TOPIC_SYSTEM,
+            json.dumps({
+                "event": "EVIDENCE_STORED_MINIO",
+                "evidence_id": str(ev.id),
+                "alert_id": str(ev.alert_id),
+                "minio_bucket": BUCKET_EVIDENCE,
+                "object_path": ev.object_path,
+                "sha256_hash": ev.sha256,
+            }),
+            qos=1,
+        )
+    except Exception:
+        pass
 
     return EvidenceResponse(
         id=str(ev.id),

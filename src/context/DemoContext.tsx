@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Target, Alert, Evidence } from '../types';
 import { MOCK_TARGET_2048, MOCK_ALERT_7821, MOCK_EVIDENCE_421 } from '../mocks/mockData';
 import { wsService } from '../services/websocketService';
+import { apiService } from '../services/apiService';
 
 export interface DemoStepInfo {
   step: number;
@@ -109,12 +110,21 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         break;
 
       case 3:
-        // Virtual fence breach & alert
+        // Virtual fence breach & alert + MinIO snapshot + MQTT broadcast
         setActiveTarget({ ...MOCK_TARGET_2048, status: 'TRACKING' });
         setIsDetectionVisible(true);
         setIsFenceBreached(true);
-        setActiveAlert(MOCK_ALERT_7821);
-        wsService.emit('alert_created', MOCK_ALERT_7821);
+        {
+          const { alert, evidence } = apiService.recordBreachEvidenceAndAlert({
+            targetId: 'TGT-2048',
+            cameraId: 'CAM-RGB-01',
+            zoneName: 'Sector 07 Zone Alpha',
+            confidence: 96.8,
+          });
+          setActiveAlert(alert);
+          setActiveEvidence(evidence);
+          wsService.emit('alert_created', alert);
+        }
         break;
 
       case 4:
