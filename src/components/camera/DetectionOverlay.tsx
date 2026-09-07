@@ -156,6 +156,58 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
         <div className="h-full w-[1px] bg-current absolute" />
       </div>
 
+      {/* ========================================================================= */}
+      {/* DIRECT VEHICLE NUMBER PLATE TARGETING RETICLE ON FRONT/REAR BUMPER FASCIA */}
+      {/* ========================================================================= */}
+      {isVehicle && anpr && (
+        <div
+          style={{
+            left: `${anpr.plateBbox?.x ?? 20}%`,
+            top: `${anpr.plateBbox?.y ?? 66}%`,
+            width: `${anpr.plateBbox?.width ?? 60}%`,
+            height: `${anpr.plateBbox?.height ?? 24}%`,
+          }}
+          className={`absolute rounded pointer-events-none transition-all duration-75 flex flex-col justify-center items-center border ${
+            isFlagged
+              ? 'border-error bg-error-container/85 shadow-[0_0_10px_rgba(255,180,171,0.8)]'
+              : 'border-secondary/90 bg-surface-container-lowest/90 shadow-[0_0_10px_rgba(149,212,176,0.6)] ring-1 ring-secondary/40'
+          }`}
+        >
+          {/* Pulsating Corner Reticles for Number Plate Lock */}
+          <div className="absolute -top-0.5 -left-0.5 w-1.5 h-1.5 border-t-2 border-l-2 border-current" />
+          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 border-t-2 border-r-2 border-current" />
+          <div className="absolute -bottom-0.5 -left-0.5 w-1.5 h-1.5 border-b-2 border-l-2 border-current" />
+          <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 border-b-2 border-r-2 border-current" />
+
+          {/* Micro HUD Plate Lock Header */}
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-1 py-0.2 rounded bg-surface-container-lowest/95 border border-secondary/60 text-[7px] font-mono font-extrabold text-secondary tracking-tighter uppercase whitespace-nowrap flex items-center gap-0.5 shadow-sm">
+            <span className="w-1 h-1 rounded-full bg-secondary animate-ping" />
+            <span>ANPR LOCK</span>
+            <span className="text-outline">·</span>
+            <span>{anpr.confidence}%</span>
+          </div>
+
+          {/* High-Security Registration Plate (HSRP) Visual */}
+          <div className="w-full h-full flex items-center justify-between px-1 py-0.5 gap-1 bg-gradient-to-r from-surface-container-lowest via-surface-container-low to-surface-container-lowest">
+            {/* IND Blue Security Band */}
+            <div className="h-full px-0.5 bg-blue-700 text-white rounded-l-[1px] flex flex-col items-center justify-center text-[5px] font-extrabold leading-tight">
+              <span>🇮🇳</span>
+              <span className="tracking-tighter">IND</span>
+            </div>
+
+            {/* Embossed Indian License Plate Number */}
+            <div className="flex-1 text-center font-mono text-[9px] sm:text-[10px] font-black tracking-wider text-on-surface truncate drop-shadow-sm">
+              {anpr.plateNumber}
+            </div>
+
+            {/* Optical Sensor Lock Dot */}
+            <div className="flex flex-col items-end pr-0.5">
+              <span className={`w-1 h-1 rounded-full ${isFlagged ? 'bg-error animate-ping' : 'bg-secondary animate-pulse'}`} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Moving Velocity Direction Arrow (Inside Vehicle Box) */}
       {isVehicle && isMoving && (
         <div className="absolute top-1 right-1 px-1 py-0.2 rounded bg-surface-container-lowest/80 border border-secondary/40 text-[8px] font-mono text-secondary font-bold flex items-center gap-0.5">

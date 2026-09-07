@@ -43,6 +43,12 @@ export interface AnprRecord {
   bearing?: string;
   isAnalyzed?: boolean;
   evidenceId?: string;
+  plateBbox?: {
+    x: number; // percentage relative to vehicle bbox (0-100)
+    y: number; // percentage relative to vehicle bbox (0-100)
+    width: number; // percentage relative to vehicle bbox (0-100)
+    height: number; // percentage relative to vehicle bbox (0-100)
+  };
 }
 
 export interface Target {
