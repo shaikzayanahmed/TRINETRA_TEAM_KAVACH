@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useDemo } from '../../context/DemoContext';
+import { soundService } from '../../services/soundService';
+import { apiService } from '../../services/apiService';
 
 export interface HeaderProps {
   onOpenCommandPalette?: () => void;
@@ -10,6 +12,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCommandPalette }) => {
   const { user } = useAuth();
   const { isFenceBreached } = useDemo();
   const [timeString, setTimeString] = useState<string>('');
+  const [liveTargetCount, setLiveTargetCount] = useState<number>(0);
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(soundService.isMuted());
 
   const handleOpenPalette = () => {
     if (onOpenCommandPalette) {
@@ -17,6 +21,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCommandPalette }) => {
     } else {
       window.dispatchEvent(new CustomEvent('open-ai-command-palette'));
     }
+  };
+
+  const handleToggleAudio = () => {
+    const nextMuted = soundService.toggleMute();
+    setIsAudioMuted(nextMuted);
   };
 
   useEffect(() => {
@@ -33,7 +42,23 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCommandPalette }) => {
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
+
+    // Initial check of targets
+    apiService.getTargets().then((tg) => setLiveTargetCount(tg.length));
+
+    // Listen to live target update events
+    const handleTargetsUpdated = (e: any) => {
+      if (Array.isArray(e.detail?.targets)) {
+        setLiveTargetCount(e.detail.targets.length);
+      }
+    };
+
+    window.addEventListener('trinetra_targets_updated', handleTargetsUpdated);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('trinetra_targets_updated', handleTargetsUpdated);
+    };
   }, []);
 
   return (
@@ -74,23 +99,38 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCommandPalette }) => {
 
       {/* Telemetry Status Bar */}
       <div className="flex items-center gap-2 sm:gap-2.5 text-[11px] flex-nowrap flex-shrink-0">
-        {/* Mobile Command Launcher Button */}
-        <button
-          onClick={handleOpenPalette}
-          className="flex md:hidden p-1.5 rounded-lg bg-surface-container border border-primary/30 text-primary"
-          title="Open AI Command Prompt"
+        {/* Real-time Target Tracking Counter */}
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded font-bold text-[10px] transition-all ${
+            liveTargetCount > 0
+              ? 'bg-primary/20 text-primary border border-primary/50 shadow-[0_0_10px_rgba(173,198,255,0.3)]'
+              : 'bg-surface-container text-outline border border-surface-container-high'
+          }`}
+          title={liveTargetCount > 0 ? `${liveTargetCount} Active Target(s) Being Tracked by YOLOv8` : '0 Active Targets · Sector Clear'}
         >
-          <span className="material-symbols-outlined text-[18px]">terminal</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${liveTargetCount > 0 ? 'bg-primary animate-ping' : 'bg-outline'}`} />
+          <span>🎯 {liveTargetCount > 0 ? `LIVE TARGETS: ${liveTargetCount}` : '0 TARGETS (CLEAR)'}</span>
+        </div>
+
+        {/* Audio Alarm Mute / Unmute Button */}
+        <button
+          onClick={handleToggleAudio}
+          className={`flex items-center gap-1 px-2 py-1 rounded font-bold text-[10px] transition-all border ${
+            isAudioMuted
+              ? 'bg-surface-container text-outline border-surface-container-high hover:text-on-surface'
+              : 'bg-error/15 text-error border-error/40 shadow-[0_0_8px_rgba(255,180,171,0.3)] hover:bg-error/25'
+          }`}
+          title={isAudioMuted ? 'Alarm Sound: Muted (Click to Enable)' : 'Alarm Sound: Active (Click to Mute / Test)'}
+        >
+          <span className="material-symbols-outlined text-[13px]">
+            {isAudioMuted ? 'volume_off' : 'volume_up'}
+          </span>
+          <span className="hidden sm:inline">{isAudioMuted ? 'ALARM: MUTED' : 'ALARM: ACTIVE'}</span>
         </button>
 
         <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded bg-surface-container shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)]">
           <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
           <span className="text-secondary font-semibold text-[10px]">ONLINE</span>
-        </div>
-
-        <div className="hidden xl:flex items-center gap-1 px-2 py-1 rounded bg-surface-container shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)]">
-          <span className="text-outline">CAM:</span>
-          <span className="text-on-surface font-semibold text-[10px]">1/2 ACTIVE</span>
         </div>
 
         {isFenceBreached && (

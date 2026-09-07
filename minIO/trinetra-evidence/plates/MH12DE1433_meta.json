@@ -1,0 +1,22 @@
+{
+  "evidenceId": "EV-ANPR-8819",
+  "plateNumber": "MH-12-DE-1433",
+  "confidence": 97.2,
+  "stateCode": "MH",
+  "jurisdiction": "Maharashtra (Pune West)",
+  "vehicleType": "SUV",
+  "vehicleColor": "Silver White",
+  "isFlagged": true,
+  "securityClearance": "UNREGISTERED",
+  "flagReason": "Unregistered civilian vehicle approaching military tactical checkpoint Delta.",
+  "speedKmh": 42.1,
+  "bearing": "NORTH (004°)",
+  "timestamp": "13:52:10",
+  "cameraId": "CAM-STREAM-02",
+  "location": "Sector 07 Checkpoint Delta",
+  "coordinates": { "lat": 34.2930, "lng": 77.7560 },
+  "sha256Hash": "5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f",
+  "minioBucket": "trinetra-evidence",
+  "minioObjectKey": "plates/MH12DE1433_crop.jpg",
+  "minioStatus": "SEALED"
+}

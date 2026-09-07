@@ -4,6 +4,7 @@ import { apiService } from '../services/apiService';
 
 export const ReportsPage: React.FC = () => {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [reportsSummary, setReportsSummary] = useState<any>(null);
   const [reportGenerated, setReportGenerated] = useState<boolean>(false);
   const [reportData, setReportData] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -12,6 +13,7 @@ export const ReportsPage: React.FC = () => {
     const fetchReports = async () => {
       const data = await apiService.getReports();
       setAuditEvents(data.auditEvents);
+      setReportsSummary(data);
     };
     fetchReports();
   }, []);
@@ -35,8 +37,10 @@ ${reportData.summary}
 
 ACTIVE TARGET: ${reportData.activeTarget}
 BREACHES RECORDED: ${reportData.totalBreaches}
+TOTAL ALERTS: ${reportData.totalAlerts}
+TOTAL FORENSIC EVIDENCE: ${reportData.totalEvidence}
 CRYPTOGRAPHIC MERKLE ROOT:
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+${reportData.merkleRoot || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
 
 STATUS: ${reportData.status} (DPDPA AUDIT READY)
 =====================================================`;
@@ -69,6 +73,8 @@ STATUS: ${reportData.status} (DPDPA AUDIT READY)
       ev.details.toLowerCase().includes(term)
     );
   });
+
+  const mainIncident = reportsSummary?.mainIncident;
 
   return (
     <div className="flex flex-col gap-4 select-none">
@@ -111,26 +117,26 @@ STATUS: ${reportData.status} (DPDPA AUDIT READY)
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-xs">
         <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col items-center text-center gap-1">
           <span className="text-outline text-[11px] uppercase">Total Alerts</span>
-          <span className="text-3xl font-bold text-on-surface">5</span>
-          <span className="text-[10px] text-outline">Last 24 Hours</span>
+          <span className="text-3xl font-bold text-on-surface">{reportsSummary?.totalAlerts ?? 0}</span>
+          <span className="text-[10px] text-outline">Local Storage Active</span>
         </div>
 
         <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col items-center text-center gap-1">
           <span className="text-outline text-[11px] uppercase">Active Threats</span>
-          <span className="text-3xl font-bold text-error">1</span>
-          <span className="text-[10px] text-error font-bold">ALT-7821</span>
+          <span className="text-3xl font-bold text-error">{reportsSummary?.activeThreats ?? 0}</span>
+          <span className="text-[10px] text-error font-bold">{mainIncident?.id || 'SECURE'}</span>
         </div>
 
         <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col items-center text-center gap-1">
           <span className="text-outline text-[11px] uppercase">Targets Detected</span>
-          <span className="text-3xl font-bold text-primary">3</span>
-          <span className="text-[10px] text-outline">Sector 07</span>
+          <span className="text-3xl font-bold text-primary">{reportsSummary?.targetsDetected ?? 0}</span>
+          <span className="text-[10px] text-outline">Real-Time AI Feed</span>
         </div>
 
         <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col items-center text-center gap-1">
           <span className="text-outline text-[11px] uppercase">Evidence Captured</span>
-          <span className="text-3xl font-bold text-secondary">12</span>
-          <span className="text-[10px] text-secondary">SHA-256 Verified</span>
+          <span className="text-3xl font-bold text-secondary">{reportsSummary?.evidenceCaptured ?? 0}</span>
+          <span className="text-[10px] text-secondary">SHA-256 IndexedDB</span>
         </div>
       </div>
 
@@ -159,39 +165,46 @@ STATUS: ${reportData.status} (DPDPA AUDIT READY)
             {reportData.summary} Sector: {reportData.sector}. Primary Interception Target: {reportData.activeTarget} in Zone Alpha.
           </p>
           <div className="flex flex-wrap items-center justify-between pt-1 text-[11px] text-outline gap-2">
-            <span className="truncate max-w-sm">CHAIN HASH: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
+            <span className="truncate max-w-sm">CHAIN HASH: {reportData.merkleRoot || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}</span>
             <span className="text-secondary font-bold">STATUS: DPDPA AUDIT READY</span>
           </div>
         </div>
       )}
 
       {/* Main Incident Card */}
-      <div className="p-5 rounded-xl bg-surface-container-low border border-error/30 shadow-tactical-plate flex flex-col gap-3 font-mono text-xs">
+      <div className="p-5 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-3 font-mono text-xs">
         <span className="font-bold text-on-surface uppercase border-b border-surface-container-high/40 pb-2 flex items-center justify-between">
-          <span>Primary Incident Telemetry — ALT-7821</span>
-          <span className="px-2 py-0.5 rounded bg-error-container text-on-error font-bold uppercase text-[10px]">
-            HIGH PRIORITY
+          <span>{mainIncident ? `Primary Incident Telemetry — ${mainIncident.id}` : 'Perimeter Status Telemetry'}</span>
+          <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${mainIncident ? 'bg-error-container text-on-error' : 'bg-secondary/20 text-secondary border border-secondary/30'}`}>
+            {mainIncident ? (mainIncident.severity || 'HIGH PRIORITY') : 'PERIMETER SECURE'}
           </span>
         </span>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
-          <div>
-            <span className="text-outline">TARGET:</span>
-            <div className="text-primary font-bold text-sm">TGT-2048</div>
+        {mainIncident ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
+            <div>
+              <span className="text-outline">TARGET:</span>
+              <div className="text-primary font-bold text-sm">{mainIncident.targetId || 'TGT-LIVE'}</div>
+            </div>
+            <div>
+              <span className="text-outline">CLASSIFICATION:</span>
+              <div className="text-error font-bold text-sm">{mainIncident.targetClassification || 'PERSON'}</div>
+            </div>
+            <div>
+              <span className="text-outline">CONFIDENCE:</span>
+              <div className="text-secondary font-bold text-sm">{mainIncident.confidence || 97.5}%</div>
+            </div>
+            <div>
+              <span className="text-outline">TIMESTAMP:</span>
+              <div className="text-on-surface font-semibold text-sm">{mainIncident.timestamp || 'RECENT'}</div>
+            </div>
           </div>
-          <div>
-            <span className="text-outline">CLASSIFICATION:</span>
-            <div className="text-error font-bold text-sm">PERSON</div>
+        ) : (
+          <div className="flex items-center gap-2 py-2 text-outline text-xs">
+            <span className="material-symbols-outlined text-secondary text-base">verified_user</span>
+            <span>No active breach incidents recorded in current session. Perimeter monitoring online.</span>
           </div>
-          <div>
-            <span className="text-outline">CONFIDENCE:</span>
-            <div className="text-secondary font-bold text-sm">96.8%</div>
-          </div>
-          <div>
-            <span className="text-outline">TIMESTAMP:</span>
-            <div className="text-on-surface font-semibold text-sm">14:32:18</div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Audit Trail Table with Search */}

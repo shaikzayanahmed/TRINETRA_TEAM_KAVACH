@@ -44,7 +44,8 @@ export const AlertsPage: React.FC = () => {
     const handleLiveBreach = (e: any) => {
       if (e.detail?.alert) {
         setAlerts((prev) => [e.detail.alert, ...prev.filter((a) => a.id !== e.detail.alert.id)]);
-        setSelectedAlert(e.detail.alert);
+        // Preserve user's active selection; only set if none is selected
+        setSelectedAlert((current) => (current ? current : e.detail.alert));
       }
     };
 
@@ -66,7 +67,8 @@ export const AlertsPage: React.FC = () => {
         }
         return [activeAlert, ...prev];
       });
-      setSelectedAlert(activeAlert);
+      // Preserve user's active inspection view
+      setSelectedAlert((current) => (current ? current : activeAlert));
     }
   }, [activeAlert]);
 
@@ -294,8 +296,12 @@ export const AlertsPage: React.FC = () => {
         {/* Alerts List (7 cols) */}
         <div className="lg:col-span-7 flex flex-col gap-2.5">
           {filteredAlerts.length === 0 ? (
-            <div className="p-8 rounded-xl bg-surface-container-low border border-surface-container-high/60 text-center font-mono text-xs text-outline">
-              No matching alerts found for selected filter criteria.
+            <div className="p-10 rounded-xl bg-surface-container-low border border-surface-container-high/60 text-center font-mono text-xs text-outline flex flex-col items-center justify-center gap-3">
+              <span className="material-symbols-outlined text-3xl text-secondary">verified_user</span>
+              <span className="font-bold text-on-surface text-sm">ALL PERIMETERS SECURE · 0 ACTIVE BREACH ALERTS</span>
+              <p className="text-[11px] text-outline max-w-sm">
+                No active threats or unacknowledged breaches detected. When an intrusion crossing an active virtual fence occurs, an alert with SHA-256 seal and alarm audio will be generated automatically.
+              </p>
             </div>
           ) : (
             filteredAlerts.map((alert) => (

@@ -27,6 +27,8 @@ export const CommandCenterPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [feedViewMode]);
 
+  const [liveTargetsCount, setLiveTargetsCount] = useState<number>(0);
+
   useEffect(() => {
     const fetchData = async () => {
       const [cams, tgts, alts, nodes] = await Promise.all([
@@ -36,8 +38,9 @@ export const CommandCenterPage: React.FC = () => {
         apiService.getEdgeNodes(),
       ]);
       setCameras(cams);
-      setTarget(tgts[0]);
-      setAlert(alts[0]);
+      setTarget(tgts[0] || null);
+      setLiveTargetsCount(tgts.length);
+      setAlert(alts[0] || null);
       setEdgeNode(nodes[0]);
       setIsLoading(false);
     };
@@ -45,15 +48,25 @@ export const CommandCenterPage: React.FC = () => {
 
     const interval = setInterval(fetchData, 3000);
 
+    const handleTargetsUpdated = (e: any) => {
+      if (Array.isArray(e.detail?.targets)) {
+        setLiveTargetsCount(e.detail.targets.length);
+        setTarget(e.detail.targets[0] || null);
+      }
+    };
+
     const handleLiveBreach = (e: any) => {
       if (e.detail?.alert) {
         setAlert(e.detail.alert);
       }
     };
+
+    window.addEventListener('trinetra_targets_updated', handleTargetsUpdated);
     window.addEventListener('trinetra_live_breach', handleLiveBreach);
 
     return () => {
       clearInterval(interval);
+      window.removeEventListener('trinetra_targets_updated', handleTargetsUpdated);
       window.removeEventListener('trinetra_live_breach', handleLiveBreach);
     };
   }, []);
@@ -72,33 +85,35 @@ export const CommandCenterPage: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4 select-none">
-      {/* Top Status & Summary Metrics */}
+      {/* Top Telemetry Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col justify-between">
           <div className="flex items-center justify-between text-outline font-mono text-[11px]">
-            <span>ACTIVE THREATS</span>
-            <span className="material-symbols-outlined text-error text-[18px]">warning</span>
+            <span>SYSTEM STATUS</span>
+            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
           </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-mono text-2xl font-bold text-error">
-              {isFenceBreached ? '1 CRIT' : '1 HIGH'}
-            </span>
-            <span className="font-mono text-[10px] text-outline">ALT-7821</span>
+            <span className="font-mono text-2xl font-bold text-secondary">ARMED</span>
+            <span className="font-mono text-[10px] text-outline">AUTO-INTERCEPT</span>
           </div>
         </div>
 
         <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col justify-between">
           <div className="flex items-center justify-between text-outline font-mono text-[11px]">
             <span>ACTIVE TARGETS</span>
-            <span className={`material-symbols-outlined text-[18px] ${isOperator || isAdmin ? 'text-primary' : 'text-outline'}`}>
+            <span className={`material-symbols-outlined text-[18px] ${isOperator || isAdmin ? (liveTargetsCount > 0 ? 'text-primary animate-pulse' : 'text-outline') : 'text-outline'}`}>
               {isOperator || isAdmin ? 'person_search' : 'lock'}
             </span>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
             {isOperator || isAdmin ? (
               <>
-                <span className="font-mono text-2xl font-bold text-primary">1 LOCK</span>
-                <span className="font-mono text-[10px] text-outline">TGT-2048</span>
+                <span className={`font-mono text-2xl font-bold ${liveTargetsCount > 0 ? 'text-primary' : 'text-outline'}`}>
+                  {liveTargetsCount > 0 ? `${liveTargetsCount} LOCK${liveTargetsCount > 1 ? 'S' : ''}` : '0 LOCKS'}
+                </span>
+                <span className="font-mono text-[10px] text-outline">
+                  {liveTargetsCount > 0 ? (displayTarget?.id || 'TRACKING') : 'SECTOR CLEAR'}
+                </span>
               </>
             ) : (
               <>

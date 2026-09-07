@@ -48,7 +48,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [spectralFilter, setSpectralFilter] = useState<SpectralFilter>('OPTICAL');
   const [useLiveAi, setUseLiveAi] = useState<boolean>(true);
-  const [filterMode, setFilterMode] = useState<DetectionFilterMode>('MOVING_VEHICLES');
+  const [filterMode, setFilterMode] = useState<DetectionFilterMode>('ALL_OBJECTS');
   const [showVlcGuide, setShowVlcGuide] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -57,11 +57,11 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
 
   // Live Vision AI Object Detection + ANPR Hook
   const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine, providerDescription } = useLiveVision(videoRef, {
-    enabled: showDetection && useLiveAi && !!videoSrc && isPlaying,
+    enabled: showDetection && useLiveAi && Boolean(videoSrc),
     detectionIntervalMs: 80,
     filterMode,
-    minConfidence: 0.35,
-    streamId: 'CAM-STREAM-02',
+    minConfidence: 0.25,
+    streamId: 'MEDIA_FILE',
   });
 
   const oldBlobRef = useRef<string | null>(null);
@@ -221,6 +221,8 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
             playsInline
             loop={isLooping}
             muted={isMuted}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
             onTimeUpdate={onTimeUpdate}
             onLoadedMetadata={onLoadedMetadata}
             onError={() => {

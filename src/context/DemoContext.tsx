@@ -1,8 +1,29 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Target, Alert, Evidence } from '../types';
-import { MOCK_TARGET_2048 } from '../mocks/mockData';
 import { wsService } from '../services/websocketService';
 import { apiService } from '../services/apiService';
+
+const SIMULATED_TARGET: Target = {
+  id: 'TGT-2048',
+  classification: 'PERSON',
+  confidence: 96.8,
+  status: 'TRACKING',
+  firstDetectedAt: new Date().toLocaleTimeString(),
+  lastSeenAt: new Date().toLocaleTimeString(),
+  cameraId: 'CAM-RGB-01',
+  sector: 'Northern Border Sector 07',
+  zone: 'Zone Alpha',
+  coordinates: {
+    lat: 34.2911,
+    lng: 77.7533,
+  },
+  heatSignatureApparent: '36.4°C Apparent',
+  speedKmh: 4.2,
+  bearing: '142° SE',
+  trajectory: [
+    { lat: 34.2902, lng: 77.7521, x: 38, y: 40, width: 22, height: 46, timestamp: new Date().toLocaleTimeString() },
+  ],
+};
 
 export interface DemoStepInfo {
   step: number;
@@ -85,10 +106,11 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const handleLiveBreach = (e: any) => {
       if (e.detail?.alert && e.detail?.evidence) {
-        setIsFenceBreached(true);
+        if (e.detail.alert.cameraId === 'CAM-RGB-01') {
+          setIsFenceBreached(true);
+        }
         setActiveAlert(e.detail.alert);
         setActiveEvidence(e.detail.evidence);
-        setIsDetectionVisible(true);
       }
     };
 
@@ -135,23 +157,23 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       case 1:
         // Target detected
-        setActiveTarget({ ...MOCK_TARGET_2048, status: 'DETECTED' });
+        setActiveTarget({ ...SIMULATED_TARGET, status: 'DETECTED' });
         setIsDetectionVisible(true);
         setIsFenceBreached(false);
-        wsService.emit('target_detected', MOCK_TARGET_2048);
+        wsService.emit('target_detected', SIMULATED_TARGET);
         break;
 
       case 2:
         // Kalman tracking
-        setActiveTarget({ ...MOCK_TARGET_2048, status: 'TRACKING' });
+        setActiveTarget({ ...SIMULATED_TARGET, status: 'TRACKING' });
         setIsDetectionVisible(true);
         setIsFenceBreached(false);
-        wsService.emit('target_updated', MOCK_TARGET_2048);
+        wsService.emit('target_updated', SIMULATED_TARGET);
         break;
 
       case 3:
         // Virtual fence breach & alert + MinIO snapshot + MQTT broadcast
-        setActiveTarget({ ...MOCK_TARGET_2048, status: 'TRACKING' });
+        setActiveTarget({ ...SIMULATED_TARGET, status: 'TRACKING' });
         setIsDetectionVisible(true);
         setIsFenceBreached(true);
         {
@@ -178,7 +200,7 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       case 4:
         // Evidence captured & SHA-256 verified
-        setActiveTarget({ ...MOCK_TARGET_2048, status: 'TRACKING' });
+        setActiveTarget({ ...SIMULATED_TARGET, status: 'TRACKING' });
         setIsDetectionVisible(true);
         setIsFenceBreached(true);
         if (activeEvidence) {
@@ -188,7 +210,7 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       case 5:
         // Complete state
-        setActiveTarget({ ...MOCK_TARGET_2048, status: 'TRACKING' });
+        setActiveTarget({ ...SIMULATED_TARGET, status: 'TRACKING' });
         setIsDetectionVisible(true);
         setIsFenceBreached(true);
         break;

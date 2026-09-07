@@ -1,4 +1,4 @@
-import { MOCK_USER, MOCK_CAMERAS, MOCK_ALERTS } from '../mocks/mockData';
+import { authService } from './authService';
 
 export interface CommandItem {
   id: string;
@@ -338,35 +338,49 @@ export class CommandPromptService {
 
   public searchCommands(query: string): CommandItem[] {
     const cleanQuery = query.trim().toLowerCase();
+    const commands = SYSTEM_COMMANDS.map((cmd) => {
+      let weight = this.learnedMemory.usageFrequency[cmd.id] || 0;
+      let isLearnedMatch = false;
 
-    // Check if query matches any learned alias
-    const learnedCommandId = this.memory.aliases[cleanQuery];
+      // Check learned alias
+      if (cleanQuery && this.learnedMemory.aliases[cleanQuery] === cmd.id) {
+        weight += 100;
+        isLearnedMatch = true;
+      }
 
-    // Build list of commands with frequency & learned weights
-    let commands = SYSTEM_COMMANDS.map((cmd) => {
-      const freq = this.memory.usageFrequency[cmd.id] || 0;
-      const isLearnedMatch = cmd.id === learnedCommandId;
+      // Check partial alias match
+      for (const [alias, mappedId] of Object.entries(this.learnedMemory.aliases)) {
+        if (mappedId === cmd.id && (alias.includes(cleanQuery) || cleanQuery.includes(alias))) {
+          weight += 50;
+          isLearnedMatch = true;
+          break;
+        }
+      }
+
       return {
         ...cmd,
-        isLearned: isLearnedMatch,
-        _weight: freq + (isLearnedMatch ? 50 : 0),
+        _weight: weight,
+        _isLearnedMatch: isLearnedMatch,
       };
     });
 
-    if (cleanQuery) {
-      commands = commands.filter((cmd) => {
-        if (cmd.isLearned) return true;
-        const matchTitle = cmd.title.toLowerCase().includes(cleanQuery);
-        const matchDesc = cmd.description.toLowerCase().includes(cleanQuery);
-        const matchKeywords = cmd.keywords.some((kw) => kw.toLowerCase().includes(cleanQuery) || cleanQuery.includes(kw.toLowerCase()));
-        return matchTitle || matchDesc || matchKeywords;
-      });
+    if (!cleanQuery) {
+      return commands.sort((a, b) => b._weight - a._weight);
     }
 
-    // Sort by learned weight & frequency
-    commands.sort((a, b) => b._weight - a._weight);
+    // Filter by query
+    const filtered = commands.filter((cmd) => {
+      if (cmd._isLearnedMatch) return true;
+      const matchTitle = cmd.title.toLowerCase().includes(cleanQuery);
+      const matchDesc = cmd.description.toLowerCase().includes(cleanQuery);
+      const matchKeywords = cmd.keywords.some((kw) => kw.toLowerCase().includes(cleanQuery) || cleanQuery.includes(kw.toLowerCase()));
+      return matchTitle || matchDesc || matchKeywords;
+    });
 
-    return commands;
+    // Sort by learned weight & frequency
+    filtered.sort((a, b) => b._weight - a._weight);
+
+    return filtered;
   }
 
   // Dynamic Context-Aware Reply Generator
@@ -374,19 +388,22 @@ export class CommandPromptService {
     const clean = prompt.trim().toLowerCase();
 
     // 1. Who is operator / User info
-    if (clean.includes('who') && (clean.includes('user') || clean.includes('operator') || clean.includes('aryan') || clean.includes('logged'))) {
-      return `OPERATOR PROFILE: ${MOCK_USER.name} (${MOCK_USER.callsign}) · Unit: ${MOCK_USER.unit} · Clearance: ${MOCK_USER.securityClearance} · Sector: ${MOCK_USER.sector}.`;
+    if (clean.includes('who') && (clean.includes('user') || clean.includes('operator') || clean.includes('aryan') || clean.includes('logged') || clean.includes('me'))) {
+      const user = authService.getCurrentUser();
+      if (user) {
+        return `OPERATOR PROFILE: ${user.name} (${user.callsign}) · Unit: ${user.unit} · Clearance: ${user.securityClearance} · Sector: ${user.sector} · Role: ${user.role}.`;
+      }
+      return `OPERATOR PROFILE: Active Sector Operator · Clearance: RESTRICTED · Sector: Northern Border Sector 07.`;
     }
 
     // 2. Camera status inquiry
     if (clean.includes('camera') || clean.includes('sensor status') || clean.includes('cctv')) {
-      const activeCount = MOCK_CAMERAS.filter((c) => c.status === 'ONLINE').length;
-      return `SENSOR TELEMETRY: ${activeCount}/${MOCK_CAMERAS.length} cameras active. Primary: CAM-RGB-01 (1080p @ 30 FPS, Latency: 3.2ms). Thermal: CAM-LWIR-01 (640x512 Uncooled FLIR, Standby).`;
+      return `SENSOR TELEMETRY: Tactical cameras active. Primary: CAM-RGB-01 (1080p @ 30 FPS, Latency: 3.2ms). Secondary: CAM-LWIR-01 / Media Stream (Standby).`;
     }
 
     // 3. Alerts & Threat counts
     if (clean.includes('how many') && (clean.includes('threat') || clean.includes('alert') || clean.includes('incident'))) {
-      return `TACTICAL INCIDENT COUNT: ${MOCK_ALERTS.length} total incident logs in current 24-hour cycle. 1 HIGH priority perimeter intrusion (ALT-7821) in Zone Alpha.`;
+      return `TACTICAL INCIDENT COUNT: Dynamic real-time alerts active. Check the Threat Alerts feed for latest cryptographically sealed breach events.`;
     }
 
     // 4. Identity & System capabilities
@@ -407,7 +424,6 @@ export class CommandPromptService {
     const clean = prompt.trim().toLowerCase();
     if (!clean) return { matchedCommand: null };
 
-    // 1. Check explicit teaching command
     const teachResult = this.parseTeachingCommand(prompt);
     if (teachResult) {
       return {

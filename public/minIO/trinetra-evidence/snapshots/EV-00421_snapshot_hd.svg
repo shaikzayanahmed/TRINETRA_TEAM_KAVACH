@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0f1d"/>
+      <stop offset="50%" stop-color="#121a2d"/>
+      <stop offset="100%" stop-color="#070a12"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="720" fill="url(#bg)"/>
+
+  <!-- Tactical Grid -->
+  <g stroke="rgba(173,198,255,0.08)" stroke-width="1" stroke-dasharray="6,6">
+    <line x1="320" y1="0" x2="320" y2="720"/>
+    <line x1="640" y1="0" x2="640" y2="720"/>
+    <line x1="960" y1="0" x2="960" y2="720"/>
+    <line x1="0" y1="180" x2="1280" y2="180"/>
+    <line x1="0" y1="360" x2="1280" y2="360"/>
+    <line x1="0" y1="540" x2="1280" y2="540"/>
+  </g>
+
+  <!-- Virtual Fence Polygon -->
+  <polygon points="384,180 960,180 896,540 320,540" fill="rgba(255,84,73,0.15)" stroke="#ff5449" stroke-width="3" filter="url(#glow)"/>
+
+  <!-- Target Bounding Box -->
+  <rect x="520" y="240" width="220" height="300" fill="none" stroke="#ff5449" stroke-width="2.5" stroke-dasharray="8,4"/>
+  <rect x="520" y="210" width="220" height="28" rx="4" fill="#ff5449"/>
+  <text x="530" y="228" fill="#ffffff" font-family="monospace" font-size="13" font-weight="bold">PERSON · INTRUSION (98.4%)</text>
+
+  <!-- Target Skeleton Silhouette -->
+  <circle cx="630" cy="285" r="22" fill="none" stroke="#ff5449" stroke-width="2"/>
+  <line x1="630" y1="307" x2="630" y2="410" stroke="#ff5449" stroke-width="3"/>
+  <line x1="630" y1="340" x2="570" y2="385" stroke="#ff5449" stroke-width="2.5"/>
+  <line x1="630" y1="340" x2="690" y2="385" stroke="#ff5449" stroke-width="2.5"/>
+  <line x1="630" y1="410" x2="585" y2="510" stroke="#ff5449" stroke-width="2.5"/>
+  <line x1="630" y1="410" x2="675" y2="510" stroke="#ff5449" stroke-width="2.5"/>
+
+  <!-- Header Overlay -->
+  <rect x="25" y="25" width="480" height="65" rx="8" fill="rgba(10,14,22,0.85)" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="40" y="52" fill="#38bdf8" font-family="monospace" font-size="15" font-weight="bold">TRINETRA FORENSIC SNAPSHOT · EV-00421</text>
+  <text x="40" y="75" fill="#94a3b8" font-family="monospace" font-size="11">CAM-RGB-01 · SECTOR 07 ZONE ALPHA · 34.2911° N, 77.7533° E</text>
+
+  <!-- Security Seal Badge -->
+  <rect x="880" y="25" width="375" height="65" rx="8" fill="rgba(10,14,22,0.85)" stroke="#22c55e" stroke-width="1.5"/>
+  <circle cx="905" cy="57" r="10" fill="#22c55e"/>
+  <text x="925" y="50" fill="#22c55e" font-family="monospace" font-size="13" font-weight="bold">MINIO S3 TAMPER-PROOF SEALED</text>
+  <text x="925" y="72" fill="#94a3b8" font-family="monospace" font-size="10">SHA-256: e3b0c44298fc1c149afbf4c8...</text>
+
+  <!-- Timestamp Overlay -->
+  <rect x="25" y="660" width="360" height="35" rx="6" fill="rgba(10,14,22,0.85)" stroke="#64748b" stroke-width="1"/>
+  <text x="40" y="683" fill="#e2e8f0" font-family="monospace" font-size="13">2026-09-08 14:32:18.412 UTC+05:30</text>
+</svg>

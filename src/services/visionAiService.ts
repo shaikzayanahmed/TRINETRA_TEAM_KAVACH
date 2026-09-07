@@ -1,14 +1,15 @@
-import { AnprRecord } from '../types';
+import { AnprRecord, Target } from '../types';
 import { anprService } from './anprService';
 import { yoloService } from './yoloService';
 import { apiService } from './apiService';
+import { soundService } from './soundService';
 import { BBoxOneEuroFilter } from '../utils/oneEuroFilter';
 
 export type DetectionFilterMode = 'MOVING_VEHICLES' | 'ALL_VEHICLES' | 'ALL_OBJECTS';
 
-function checkTargetFenceBreach(cx: number, cy: number): boolean {
+function checkTargetFenceBreach(cx: number, cy: number, streamId?: string): boolean {
   try {
-    const fence = apiService.getActiveFenceSync();
+    const fence = apiService.getActiveFenceSync(streamId);
     if (!fence || fence.status === 'INACTIVE' || !fence.points || fence.points.length < 2) {
       return false;
     }
@@ -41,7 +42,7 @@ function checkTargetFenceBreach(cx: number, cy: number): boolean {
       return inside;
     }
   } catch (e) {}
-  return cx > 38 && cx < 88 && cy > 20 && cy < 85;
+  return false;
 }
 
 export interface DetectOptions {
@@ -130,8 +131,8 @@ class VisionAiService {
     }
     this.lastBreachReportMs.set(targetId, now);
 
-    const activeFence = apiService.getActiveFenceSync();
-    const zoneName = activeFence?.name || 'Sector 07 Zone Alpha';
+    const activeFence = apiService.getActiveFenceSync(streamId);
+    const zoneName = activeFence?.name || (streamId === 'CAM-STREAM-02' || streamId === 'MEDIA_FILE' ? 'Highway NH-1A Corridor' : 'Sector 07 Zone Alpha');
 
     // Capture real-time snapshot frame from video canvas
     let snapshotBase64: string | undefined;
@@ -160,6 +161,7 @@ class VisionAiService {
     });
 
     try {
+      soundService.playBreachAlarm();
       window.dispatchEvent(
         new CustomEvent('trinetra_live_breach', {
           detail: { alert, evidence, targetId, zoneName, timestamp: new Date().toISOString() },
@@ -532,7 +534,7 @@ class VisionAiService {
         }
 
         const isHuman = existing.class === 'PERSON' || existing.class === 'HUMAN';
-        const isTripwireBreach = isHuman && checkTargetFenceBreach(smoothedCx, smoothedCy);
+        const isTripwireBreach = isHuman && checkTargetFenceBreach(smoothedCx, smoothedCy, streamId);
 
         if (isTripwireBreach) {
           this.triggerLiveBreachAlert(existing.id, streamId, cand.score, videoElement, now);
@@ -631,7 +633,7 @@ class VisionAiService {
         }
 
         const isHuman = cand.upperClass === 'PERSON' || cand.upperClass === 'HUMAN';
-        const isTripwireBreach = isHuman && checkTargetFenceBreach(cand.cx, cand.cy);
+        const isTripwireBreach = isHuman && checkTargetFenceBreach(cand.cx, cand.cy, streamId);
 
         if (isTripwireBreach) {
           this.triggerLiveBreachAlert(newId, streamId, cand.score, videoElement, now);
@@ -690,7 +692,7 @@ class VisionAiService {
             const centerX = smoothed.x + smoothed.width / 2;
             const centerY = smoothed.y + smoothed.height / 2;
             const isHuman = track.class === 'PERSON' || track.class === 'HUMAN';
-            const isTripwireBreach = isHuman && checkTargetFenceBreach(centerX, centerY);
+            const isTripwireBreach = isHuman && checkTargetFenceBreach(centerX, centerY, streamId);
 
             mappedResults.push({
               id: track.id,
@@ -719,8 +721,21 @@ class VisionAiService {
         }
       }
 
-      // Clean up stale tracks for this stream
+      // Clean up stale tracks for this stream (timeout after 900ms of non-detection)
       this.pruneInactiveTracks(activeTracks, now);
+
+      // Synchronize live active targets with apiService and dispatch event
+      const liveTargets = this.getAllActiveLiveTargets();
+      apiService.setLiveTargets(liveTargets);
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('trinetra_targets_updated', {
+              detail: { targets: liveTargets },
+            })
+          );
+        }
+      } catch (e) {}
 
       return mappedResults;
     } catch (err) {
@@ -728,6 +743,73 @@ class VisionAiService {
       return [];
     }
   }
+
+  private pruneInactiveTracks(activeTracks: Map<string, ActiveTrack>, now: number) {
+    for (const [id, track] of activeTracks.entries()) {
+      if (now - track.lastSeenMs > 950 || track.missedFrames > 8) {
+        activeTracks.delete(id);
+      }
+    }
+  }
+
+  public getAllActiveLiveTargets(): Target[] {
+    const targets: Target[] = [];
+    for (const [streamId, tracks] of this.streamTracks.entries()) {
+      for (const [trackId, track] of tracks.entries()) {
+        const isVehicle = VEHICLE_CLASSES.has(track.class);
+        const classification = (track.class === 'PERSON' || track.class === 'HUMAN') ? 'PERSON' : (isVehicle ? 'VEHICLE' : 'UNKNOWN');
+
+        targets.push({
+          id: track.id,
+          classification,
+          confidence: Math.round(track.score),
+          status: 'TRACKING',
+          firstDetectedAt: new Date(track.firstSeenMs).toLocaleTimeString(),
+          lastSeenAt: new Date(track.lastSeenMs).toLocaleTimeString(),
+          cameraId: streamId === 'DEFAULT_STREAM' ? 'CAM-RGB-01' : streamId,
+          sector: 'Northern Border Sector 07',
+          zone: 'Zone Alpha',
+          coordinates: {
+            lat: 34.2911 + (track.cy - 50) * 0.0004,
+            lng: 77.7533 + (track.cx - 50) * 0.0004,
+          },
+          trajectory: track.history.map((h) => ({
+            x: h.cx,
+            y: h.cy,
+            lat: 34.2911 + (h.cy - 50) * 0.0004,
+            lng: 77.7533 + (h.cx - 50) * 0.0004,
+            width: track.width,
+            height: track.height,
+            timestamp: new Date(h.time).toLocaleTimeString(),
+          })),
+          speedKmh: track.speedKmh,
+          bearing: track.bearingLabel,
+          anpr: track.anpr,
+        });
+      }
+    }
+    return targets;
+  }
+
+  public clearStreamTracks(streamId?: string) {
+    if (streamId) {
+      this.streamTracks.delete(streamId);
+    } else {
+      this.streamTracks.clear();
+    }
+    const liveTargets = this.getAllActiveLiveTargets();
+    apiService.setLiveTargets(liveTargets);
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('trinetra_targets_updated', {
+            detail: { targets: liveTargets },
+          })
+        );
+      }
+    } catch (e) {}
+  }
 }
 
 export const visionAiService = new VisionAiService();
+

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" width="480" height="160">
+  <rect x="4" y="4" width="472" height="152" rx="12" fill="#1b2a1a" stroke="#4d7c0f" stroke-width="6"/>
+  <rect x="12" y="12" width="456" height="136" rx="8" fill="#142113" stroke="#65a30d" stroke-width="2"/>
+
+  <!-- Military Arrow Icon -->
+  <polygon points="40,25 22,65 34,65 34,135 46,135 46,65 58,65" fill="#facc15"/>
+
+  <!-- High Security Hologram Tag -->
+  <rect x="75" y="25" width="22" height="22" rx="3" fill="#3f6212" stroke="#84cc16" stroke-width="1"/>
+  <text x="86" y="40" fill="#facc15" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle">MOD</text>
+
+  <!-- Embossed Plate Characters -->
+  <text x="270" y="105" fill="#facc15" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="52" font-weight="900" letter-spacing="6" text-anchor="middle">
+    ↑ 04A 8902 D
+  </text>
+
+  <text x="450" y="135" fill="#84cc16" font-family="monospace" font-size="9" font-weight="bold" text-anchor="end">
+    INDIAN ARMED FORCES · 99.1%
+  </text>
+</svg>

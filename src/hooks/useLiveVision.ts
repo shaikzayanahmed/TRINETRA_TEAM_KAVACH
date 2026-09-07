@@ -14,7 +14,7 @@ export const useLiveVision = (
   videoRef: React.RefObject<HTMLVideoElement>,
   options: UseLiveVisionOptions = {}
 ) => {
-  const { enabled = true, detectionIntervalMs = 80, filterMode = 'MOVING_VEHICLES', minConfidence = 0.40, streamId = 'DEFAULT_STREAM' } = options;
+  const { enabled = true, detectionIntervalMs = 80, filterMode = 'ALL_OBJECTS', minConfidence = 0.25, streamId = 'DEFAULT_STREAM' } = options;
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [isModelReady, setIsModelReady] = useState<boolean>(false);
   const [liveDetections, setLiveDetections] = useState<LiveDetectionResult[]>([]);
@@ -117,6 +117,8 @@ export const useLiveVision = (
       isCancelled = true;
       cancelAnimationFrame(animFrameId);
       isRunningRef.current = false;
+      visionAiService.clearStreamTracks(streamId);
+      setLiveDetections([]);
     };
   }, [enabled, videoRef, detectionIntervalMs, filterMode, minConfidence, streamId]);
 
@@ -125,9 +127,11 @@ export const useLiveVision = (
       const cleanup = runDetectionLoop();
       return () => {
         if (cleanup) cleanup();
+        visionAiService.clearStreamTracks(streamId);
+        setLiveDetections([]);
       };
     }
-  }, [isModelReady, enabled, runDetectionLoop]);
+  }, [isModelReady, enabled, runDetectionLoop, streamId]);
 
   return {
     isModelLoading,

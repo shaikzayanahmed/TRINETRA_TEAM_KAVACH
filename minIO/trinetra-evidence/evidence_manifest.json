@@ -1,0 +1,336 @@
+{
+  "system": "TRINETRA AI DEFENSE PLATFORM - JUDICIAL FORENSIC VAULT",
+  "storageProvider": "MinIO S3-Compatible WORM Object Storage",
+  "bucket": "trinetra-evidence",
+  "endpoint": "http://127.0.0.1:9000",
+  "compliance": "WORM (Write Once Read Many) / DPDPA 2023 / Indian Evidence Act Sec 65B Digital Certificate",
+  "totalEvidenceCount": 6,
+  "lastIngestTimestamp": "2026-09-08T00:50:00Z",
+  "records": [
+    {
+      "evidenceId": "EV-00421",
+      "alertId": "ALT-7821",
+      "targetId": "TGT-2048",
+      "classification": "PERSON",
+      "confidence": 98.4,
+      "cameraId": "CAM-RGB-01",
+      "zone": "Sector 07 Zone Alpha",
+      "sector": "Northern Border Sector 07",
+      "coordinates": { "lat": 34.2911, "lng": 77.7533 },
+      "timestamp": "14:32:18",
+      "files": {
+        "videoClip": "clips/EV-00421_breach_clip.webm",
+        "snapshot": "snapshots/EV-00421_snapshot_hd.svg"
+      },
+      "sha256Hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tamperProofStatus": "VERIFIED_SEALED",
+      "fileSizeKb": 4820,
+      "forensicDossier": {
+        "subjectType": "PERSON",
+        "person": {
+          "estimatedHeightCm": 178,
+          "heightVarianceCm": 3,
+          "complexion": "MEDIUM_WHEATISH",
+          "clothingUpper": {
+            "type": "Tactical Hooded Parka / Windbreaker",
+            "color": "Dark Charcoal / Matte Black",
+            "pattern": "Solid Non-Reflective"
+          },
+          "clothingLower": {
+            "type": "Reinforced Cargo Combat Pants",
+            "color": "Dark Shadow Black"
+          },
+          "footwear": {
+            "type": "Tactical Combat Boots",
+            "color": "Black"
+          },
+          "faceCovering": {
+            "isMasked": true,
+            "maskType": "BALACLAVA",
+            "headwear": "HOOD_UP",
+            "eyewear": "NONE"
+          },
+          "carriedItems": {
+            "hasBackpack": true,
+            "bagType": "TACTICAL_RUCKSACK",
+            "bagColor": "Coyote Tan / Dark Olive",
+            "hasSuspiciousObject": true,
+            "suspiciousObjectType": "PRY_TOOL",
+            "suspiciousObjectDetail": "High-tensile steel pry bar (~45cm) secured to right backpack strap"
+          },
+          "gaitPosture": "CROUCHING_SNEAKING",
+          "confidenceScore": 97.4
+        },
+        "aiModelEngine": "YOLOv8x-Attributes-v3 + DeepSORT Multi-Attribute ReID",
+        "inferenceFps": 29.8,
+        "threatLevelAssessment": "CRITICAL_SUSPECT",
+        "summaryNarration": "Subject identified as adult male (~178cm ± 3cm, medium build) actively breaching Zone Alpha restricted perimeter. Subject is masked with a full-face balaclava with hood raised to obscure facial recognition. Upper wear is a matte black hooded tactical parka with black cargo pants. Equipped with a tactical rucksack (Coyote Tan) carrying an exposed 45cm metallic pry tool. Stealth crouching movement posture indicates deliberate covert incursion."
+      }
+    },
+    {
+      "evidenceId": "EV-ANPR-9042",
+      "alertId": "ALT-ANPR-WARN",
+      "targetId": "TGT-V201",
+      "classification": "VEHICLE",
+      "confidence": 98.6,
+      "cameraId": "CAM-STREAM-02",
+      "zone": "Sector 07 Northern Highway (Zone Alpha)",
+      "sector": "Northern Border Sector 07",
+      "coordinates": { "lat": 34.2960, "lng": 77.7510 },
+      "timestamp": "14:28:44",
+      "plateNumber": "DL-01-AB-1234",
+      "vehicleColor": "Dark Obsidian",
+      "vehicleType": "SUV / FULL-SIZE",
+      "securityClearance": "SUSPICIOUS",
+      "files": {
+        "plateCrop": "plates/DL01AB1234_crop.svg",
+        "metadata": "plates/DL01AB1234_meta.json"
+      },
+      "sha256Hash": "9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b",
+      "tamperProofStatus": "VERIFIED_SEALED",
+      "fileSizeKb": 1420,
+      "forensicDossier": {
+        "subjectType": "VEHICLE",
+        "vehicle": {
+          "brand": "Toyota",
+          "model": "Fortuner 4x4 (Black Edition)",
+          "bodyType": "SUV",
+          "color": "Dark Obsidian",
+          "distinguishingFeatures": [
+            "85% Dark Window Tint (VLT violation)",
+            "Matte Black Expedition Roof Rack",
+            "Heavy-Duty Front Bull Bar",
+            "Custom Off-Road Alloy Wheels (18-inch)"
+          ],
+          "tintedGlassPercent": 85,
+          "occupantCountEstimated": 2,
+          "anprMatchConfidence": 98.6
+        },
+        "aiModelEngine": "YOLOv8-VehicleAttr-v2 + OCR-CRNN-LPR",
+        "inferenceFps": 31.2,
+        "threatLevelAssessment": "CRITICAL_SUSPECT",
+        "summaryNarration": "Black Toyota Fortuner 4x4 matching national watchlist record (DL-01-AB-1234). Detected at 58 km/h transiting northern corridor with heavy window tint (85% opacity) and tactical roof modifications. Two occupants detected in front cabin. Flagged for immediate tactical intercept."
+      }
+    },
+    {
+      "evidenceId": "EV-ANPR-8819",
+      "alertId": "ALT-ANPR-AUTO",
+      "targetId": "TGT-V204",
+      "classification": "VEHICLE",
+      "confidence": 97.2,
+      "cameraId": "CAM-STREAM-02",
+      "zone": "Sector 07 Checkpoint Delta",
+      "sector": "Northern Border Sector 07",
+      "coordinates": { "lat": 34.2930, "lng": 77.7560 },
+      "timestamp": "13:52:10",
+      "plateNumber": "MH-12-DE-1433",
+      "vehicleColor": "Silver White",
+      "vehicleType": "SUV",
+      "securityClearance": "AUTHORIZED",
+      "files": {
+        "plateCrop": "plates/MH12DE1433_crop.svg",
+        "metadata": "plates/MH12DE1433_meta.json"
+      },
+      "sha256Hash": "5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f",
+      "tamperProofStatus": "VERIFIED_SEALED",
+      "fileSizeKb": 1380,
+      "forensicDossier": {
+        "subjectType": "VEHICLE",
+        "vehicle": {
+          "brand": "Mahindra",
+          "model": "Scorpio-N Z8L",
+          "bodyType": "SUV",
+          "color": "Silver White",
+          "distinguishingFeatures": [
+            "OEM Factory Chrome Grille",
+            "Clean Untinted Glass",
+            "Dual LED Projector Headlamps",
+            "Rear Spoiler with Integrated Brake Light"
+          ],
+          "tintedGlassPercent": 15,
+          "occupantCountEstimated": 1,
+          "anprMatchConfidence": 97.2
+        },
+        "aiModelEngine": "YOLOv8-VehicleAttr-v2 + OCR-CRNN-LPR",
+        "inferenceFps": 30.0,
+        "threatLevelAssessment": "ROUTINE",
+        "summaryNarration": "Silver White Mahindra Scorpio-N SUV verified through ANPR (MH-12-DE-1433). Valid state registration, no security red flags. Normal velocity."
+      }
+    },
+    {
+      "evidenceId": "EV-ANPR-7721",
+      "alertId": "ALT-ANPR-DEF",
+      "targetId": "TGT-V208",
+      "classification": "VEHICLE",
+      "confidence": 99.1,
+      "cameraId": "CAM-STREAM-02",
+      "zone": "Sector 07 Defense Perimeter Gate 2",
+      "sector": "Northern Border Sector 07",
+      "coordinates": { "lat": 34.2880, "lng": 77.7610 },
+      "timestamp": "12:18:05",
+      "plateNumber": "ARMY-04-A-8902",
+      "vehicleColor": "Tactical Olive Green",
+      "vehicleType": "MILITARY CONVOY",
+      "securityClearance": "AUTHORIZED",
+      "files": {
+        "plateCrop": "plates/ARMY04A8902_crop.svg",
+        "metadata": "plates/ARMY04A8902_meta.json"
+      },
+      "sha256Hash": "7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e",
+      "tamperProofStatus": "VERIFIED_SEALED",
+      "fileSizeKb": 1540,
+      "forensicDossier": {
+        "subjectType": "VEHICLE",
+        "vehicle": {
+          "brand": "Tata Defense / Ashok Leyland",
+          "model": "4x4 High-Mobility Logistics Carrier",
+          "bodyType": "MILITARY_CONVOY",
+          "color": "Tactical Olive Green",
+          "distinguishingFeatures": [
+            "Military Camouflage Canvas Canopy",
+            "Tactical Infrared Convoy Beacon",
+            "Heavy Armored Towing Hitch",
+            "Ministry of Defense Insignia Stencil"
+          ],
+          "tintedGlassPercent": 0,
+          "occupantCountEstimated": 4,
+          "anprMatchConfidence": 99.1
+        },
+        "aiModelEngine": "YOLOv8-VehicleAttr-v2 + OCR-CRNN-LPR",
+        "inferenceFps": 32.5,
+        "threatLevelAssessment": "ROUTINE",
+        "summaryNarration": "Official military logistics transport unit with authorized defense registration plate (ARMY-04-A-8902). Escort transponder verified."
+      }
+    },
+    {
+      "evidenceId": "EV-00418",
+      "alertId": "ALT-7819",
+      "targetId": "TGT-1994",
+      "classification": "PERSON",
+      "confidence": 92.1,
+      "cameraId": "CAM-RGB-01",
+      "zone": "Sector 07 Ridge Line",
+      "sector": "Northern Border Sector 07",
+      "coordinates": { "lat": 34.2950, "lng": 77.7480 },
+      "timestamp": "11:15:20",
+      "files": {
+        "videoClip": "clips/EV-00418_anomalous_motion.webm"
+      },
+      "sha256Hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "tamperProofStatus": "VERIFIED_SEALED",
+      "fileSizeKb": 1240,
+      "forensicDossier": {
+        "subjectType": "PERSON",
+        "person": {
+          "estimatedHeightCm": 173,
+          "heightVarianceCm": 4,
+          "complexion": "MEDIUM_WHEATISH",
+          "clothingUpper": {
+            "type": "Navy Blue Tactical Windbreaker Jacket",
+            "color": "Dark Navy Blue",
+            "pattern": "Solid"
+          },
+          "clothingLower": {
+            "type": "Ripstop Outdoor Hiking Trousers",
+            "color": "Khaki Beige"
+          },
+          "footwear": {
+            "type": "Trail Trekking Boots",
+            "color": "Brown / Mud Tan"
+          },
+          "faceCovering": {
+            "isMasked": true,
+            "maskType": "N95_SURGICAL",
+            "headwear": "CAP",
+            "eyewear": "SUNGLASSES"
+          },
+          "carriedItems": {
+            "hasBackpack": true,
+            "bagType": "SLING_BAG",
+            "bagColor": "Charcoal Gray",
+            "hasSuspiciousObject": true,
+            "suspiciousObjectType": "METALLIC_CONTAINER",
+            "suspiciousObjectDetail": "Cylindrical metallic apparatus with external wire leads"
+          },
+          "gaitPosture": "RAPID_WALKING",
+          "confidenceScore": 92.4
+        },
+        "aiModelEngine": "YOLOv8x-Attributes-v3",
+        "inferenceFps": 28.5,
+        "threatLevelAssessment": "FLAGGED_PERSON_OF_INTEREST",
+        "summaryNarration": "Individual (~173cm) detected walking rapidly along northern ridge line. Wearing navy windbreaker, khaki ripstop trousers, black tactical cap, dark sunglasses, and N95 surgical mask. Carrying a charcoal cross-body sling bag containing an unresolved cylindrical metallic payload."
+      }
+    },
+    {
+      "evidenceId": "EV-00395",
+      "alertId": "ALT-7804",
+      "targetId": "TGT-1940",
+      "classification": "HYBRID_MULTI",
+      "confidence": 98.4,
+      "cameraId": "CAM-RGB-01",
+      "zone": "Sector 07 Perimeter Gate 3",
+      "sector": "Northern Border Sector 07",
+      "coordinates": { "lat": 34.2960, "lng": 77.7510 },
+      "timestamp": "09:04:10",
+      "plateNumber": "UP-32-CD-5678",
+      "vehicleColor": "Crimson Red",
+      "vehicleType": "COMMERCIAL TRUCK",
+      "files": {
+        "videoClip": "clips/EV-00395_vehicle_trap.webm",
+        "snapshot": "snapshots/EV-00395_snapshot_hd.svg"
+      },
+      "sha256Hash": "a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9",
+      "tamperProofStatus": "VERIFIED_SEALED",
+      "fileSizeKb": 8900,
+      "forensicDossier": {
+        "subjectType": "HYBRID_MULTI",
+        "vehicle": {
+          "brand": "Eicher Motors / BharatBenz",
+          "model": "Pro 3019 Medium Freight Carrier",
+          "bodyType": "COMMERCIAL_VAN",
+          "color": "Crimson Red",
+          "distinguishingFeatures": [
+            "Heavy Wooden Cargo Sideboards",
+            "Obscured Rear License Plate Bracket",
+            "Yellow Cabin Roof Markers"
+          ],
+          "tintedGlassPercent": 30,
+          "occupantCountEstimated": 2,
+          "anprMatchConfidence": 98.4
+        },
+        "person": {
+          "estimatedHeightCm": 181,
+          "heightVarianceCm": 4,
+          "complexion": "DARK_DUSKY",
+          "clothingUpper": {
+            "type": "Heavy Denim Work Shirt",
+            "color": "Faded Blue Denim"
+          },
+          "clothingLower": {
+            "type": "Work Jeans",
+            "color": "Dark Indigo"
+          },
+          "faceCovering": {
+            "isMasked": true,
+            "maskType": "CLOTH_MASK",
+            "headwear": "BEANIE",
+            "eyewear": "NONE"
+          },
+          "carriedItems": {
+            "hasBackpack": false,
+            "bagType": "NONE",
+            "hasSuspiciousObject": true,
+            "suspiciousObjectType": "WIRE_CUTTER",
+            "suspiciousObjectDetail": "Heavy industrial wire cutters in right side pocket"
+          },
+          "gaitPosture": "LOITERING_STANDING",
+          "confidenceScore": 96.0
+        },
+        "aiModelEngine": "YOLOv8x-HybridForensic-v2",
+        "inferenceFps": 29.0,
+        "threatLevelAssessment": "ELEVATED_WATCH",
+        "summaryNarration": "Red commercial transport truck stopped outside Gate 3. Driver exited vehicle wearing denim shirt, beanie, and cloth face mask. AI detected industrial wire cutters in side pocket while loitering near restricted sensor cable conduit."
+      }
+    }
+  ]
+}

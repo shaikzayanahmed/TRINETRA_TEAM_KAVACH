@@ -88,7 +88,7 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
   }, []);
 
   const hasLiveDetections = showDetection && !isDemoRunning && liveDetections.length > 0;
-  const hasDemoDetection = showDetection && (isDemoRunning || !useLiveAi) && isDetectionVisible && activeTarget;
+  const hasDemoDetection = showDetection && isDemoRunning && isDetectionVisible && activeTarget && (activeTarget.cameraId === 'CAM-RGB-01' || !activeTarget.cameraId);
 
   return (
     <div className="relative w-full aspect-video bg-surface-container-lowest overflow-hidden flex items-center justify-center select-none">

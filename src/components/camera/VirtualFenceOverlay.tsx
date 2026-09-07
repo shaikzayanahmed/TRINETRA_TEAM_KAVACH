@@ -15,7 +15,7 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
   isThermal = false,
 }) => {
   const [activeFence, setActiveFence] = useState<VirtualFence>(
-    customFence || apiService.getActiveFenceSync()
+    customFence || apiService.getActiveFenceSync(cameraId)
   );
   const { isFenceBreached } = useDemo();
 
@@ -26,14 +26,26 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
     }
 
     const updateFence = () => {
-      const current = apiService.getActiveFenceSync();
+      const current = apiService.getActiveFenceSync(cameraId);
       setActiveFence(current);
     };
 
     updateFence();
     const handleUpdateEvent = (e: any) => {
       if (e.detail?.activeFence) {
-        setActiveFence(e.detail.activeFence);
+        // If active fence matches this camera or source, use it; otherwise get latest for camera
+        const updated = e.detail.activeFence as VirtualFence;
+        if (
+          !updated.sourceTarget ||
+          updated.sourceTarget === cameraId ||
+          updated.assignedCameras?.includes(cameraId) ||
+          (cameraId === 'CAM-LWIR-01' && updated.sourceTarget === 'MEDIA_FILE') ||
+          (cameraId === 'CAM-STREAM-02' && updated.sourceTarget === 'MEDIA_FILE')
+        ) {
+          setActiveFence(updated);
+        } else {
+          updateFence();
+        }
       } else {
         updateFence();
       }

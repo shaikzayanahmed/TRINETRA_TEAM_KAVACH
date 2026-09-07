@@ -1,0 +1,39 @@
+{
+  "Version": "2012-10-17",
+  "Bucket": "trinetra-evidence",
+  "ObjectLockConfiguration": {
+    "ObjectLockEnabled": "Enabled",
+    "Rule": {
+      "DefaultRetention": {
+        "Mode": "COMPLIANCE",
+        "Days": 3650
+      }
+    }
+  },
+  "Statement": [
+    {
+      "Sid": "AllowEncryptedEvidenceIngest",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": ["arn:aws:iam::trinetra:role/EdgeInferenceNode"]
+      },
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:PutObjectLegalHold",
+        "s3:GetObjectRetention"
+      ],
+      "Resource": "arn:aws:s3:::trinetra-evidence/*"
+    },
+    {
+      "Sid": "DenyUnsignedDeletions",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": [
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::trinetra-evidence/*"
+    }
+  ]
+}

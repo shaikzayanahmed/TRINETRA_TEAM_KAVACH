@@ -1,0 +1,22 @@
+{
+  "evidenceId": "EV-ANPR-7721",
+  "plateNumber": "ARMY-04-A-8902",
+  "confidence": 99.1,
+  "stateCode": "ARMY",
+  "jurisdiction": "Indian Armed Forces (Northern Command Logistics)",
+  "vehicleType": "TACTICAL MILITARY TRUCK",
+  "vehicleColor": "Olive Drab Camo",
+  "isFlagged": false,
+  "securityClearance": "AUTHORIZED",
+  "flagReason": "Authorized defense logistics convoy vehicle on scheduled patrol route.",
+  "speedKmh": 34.6,
+  "bearing": "SOUTH-EAST (142°)",
+  "timestamp": "12:18:05",
+  "cameraId": "CAM-STREAM-02",
+  "location": "Sector 07 Defense Perimeter Gate 2",
+  "coordinates": { "lat": 34.2890, "lng": 77.7570 },
+  "sha256Hash": "7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e",
+  "minioBucket": "trinetra-evidence",
+  "minioObjectKey": "plates/ARMY04A8902_crop.jpg",
+  "minioStatus": "SEALED"
+}

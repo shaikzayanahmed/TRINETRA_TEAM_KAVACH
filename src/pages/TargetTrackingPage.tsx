@@ -17,12 +17,33 @@ export const TargetTrackingPage: React.FC = () => {
     const fetchTargets = async () => {
       const data = await apiService.getTargets();
       setTargets(data);
-      setSelectedTarget(data[0]);
+      if (data.length > 0) {
+        setSelectedTarget(data[0]);
+      } else {
+        setSelectedTarget(null);
+      }
     };
     fetchTargets();
+
+    const handleTargetsUpdated = (e: any) => {
+      if (Array.isArray(e.detail?.targets)) {
+        const live = e.detail.targets;
+        setTargets(live);
+        if (live.length > 0) {
+          setSelectedTarget((prev) => (prev && live.some((t: Target) => t.id === prev.id) ? prev : live[0]));
+        } else {
+          setSelectedTarget(null);
+        }
+      }
+    };
+
+    window.addEventListener('trinetra_targets_updated', handleTargetsUpdated);
+    return () => {
+      window.removeEventListener('trinetra_targets_updated', handleTargetsUpdated);
+    };
   }, []);
 
-  const currentTarget = activeTarget || selectedTarget;
+  const currentTarget = activeTarget || selectedTarget || targets[0] || null;
 
   const handleRecalculateKalman = () => {
     setIsKalmanRecalculating(true);
@@ -109,7 +130,7 @@ export const TargetTrackingPage: React.FC = () => {
       )}
 
       {/* Target Details Grid */}
-      {currentTarget && (
+      {currentTarget && targets.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Main Target Telemetry Card (7 cols) */}
           <div className="lg:col-span-7 flex flex-col gap-4">
@@ -294,6 +315,36 @@ export const TargetTrackingPage: React.FC = () => {
                 </Link>
               </div>
             </div>
+          </div>
+        </div>
+      ) : (
+        /* Standby Clear State when 0 targets are tracked */
+        <div className="p-12 rounded-2xl bg-surface-container-low border border-surface-container-high flex flex-col items-center justify-center text-center gap-4 font-mono shadow-tactical-plate">
+          <div className="relative w-20 h-20 rounded-full bg-surface-container border border-secondary/40 flex items-center justify-center text-secondary shadow-[0_0_20px_rgba(149,212,176,0.2)]">
+            <span className="material-symbols-outlined text-4xl animate-pulse">radar</span>
+            <div className="absolute inset-0 rounded-full border border-secondary/30 animate-ping" />
+          </div>
+          <div className="flex flex-col gap-1 max-w-md">
+            <h2 className="font-headline text-base font-bold text-on-surface uppercase tracking-wider">
+              No Active Targets in Sector · All Clear
+            </h2>
+            <p className="text-outline text-xs leading-relaxed">
+              Optical and thermal sensors are actively monitoring. Real-time targets and Kalman vectors will lock on automatically when a person or vehicle enters the camera or media feed.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <Link
+              to="/virtual-fence"
+              className="px-4 py-2 rounded-lg bg-primary text-on-primary font-bold transition-all hover:bg-primary/90 shadow-md"
+            >
+              [ 🎬 OPEN VIRTUAL FENCE / MEDIA FEED ]
+            </Link>
+            <Link
+              to="/surveillance"
+              className="px-4 py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-highest font-semibold transition-colors"
+            >
+              [ 📹 LIVE WEBCAM SURVEILLANCE ]
+            </Link>
           </div>
         </div>
       )}

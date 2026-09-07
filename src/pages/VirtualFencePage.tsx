@@ -3,7 +3,8 @@ import { VirtualFence, VirtualFencePoint, FenceGeometryType, FenceSourceTarget }
 import { apiService } from '../services/apiService';
 import { TacticalMapViewer } from '../components/map/TacticalMapViewer';
 import { WebcamFeed } from '../components/camera/WebcamFeed';
-import { VideoStreamFeed } from '../components/camera/VideoStreamFeed';
+import { DetectionOverlay } from '../components/camera/DetectionOverlay';
+import { useLiveVision } from '../hooks/useLiveVision';
 import { useDemo } from '../context/DemoContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,13 +27,62 @@ const DEFAULT_POINTS: Record<FenceGeometryType, VirtualFencePoint[]> = {
   ],
 };
 
+const MEDIA_PRESETS = [
+  {
+    id: 'highway',
+    label: 'Highway NH-1A Corridor',
+    description: 'Multi-lane highway with fast moving vehicles & trucks',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+  },
+  {
+    id: 'convoy',
+    label: 'Tactical Convoy Approach',
+    description: 'Vehicle checkpoint approach and security perimeter',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
+  },
+  {
+    id: 'patrol',
+    label: 'Urban Perimeter Recon',
+    description: 'High-speed urban vehicle transit loop',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+  },
+];
+
 export const VirtualFencePage: React.FC = () => {
   const [storedFences, setStoredFences] = useState<VirtualFence[]>([]);
   const [currentEditingFenceId, setCurrentEditingFenceId] = useState<string>('VF-01');
   const [activeFenceId, setActiveFenceId] = useState<string>('VF-01');
   const [showStoredDrawer, setShowStoredDrawer] = useState<boolean>(false);
 
+  // Source Target: Live Camera vs Media Upload vs GIS Map
   const [sourceTarget, setSourceTarget] = useState<FenceSourceTarget>('CAM-RGB-01');
+
+  // Media Feed Player States (Clean, outside the canvas)
+  const [mediaVideoSrc, setMediaVideoSrc] = useState<string>(MEDIA_PRESETS[0].url);
+  const [mediaFileName, setMediaFileName] = useState<string>(MEDIA_PRESETS[0].label);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('highway');
+  const [mediaPlaying, setMediaPlaying] = useState<boolean>(true);
+  const [mediaCurrentTime, setMediaCurrentTime] = useState<number>(0);
+  const [mediaDuration, setMediaDuration] = useState<number>(0);
+  const [mediaMuted, setMediaMuted] = useState<boolean>(true);
+  const [mediaLoop, setMediaLoop] = useState<boolean>(true);
+  const [mediaSpeed, setMediaSpeed] = useState<number>(1.0);
+  const [mediaSpectralFilter, setMediaSpectralFilter] = useState<'OPTICAL' | 'FLIR_IRONBOW' | 'WHITE_HOT' | 'GREEN_NVG'>('OPTICAL');
+  const [showMediaAi, setShowMediaAi] = useState<boolean>(true);
+
+  const mediaVideoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Live Vision AI in Virtual Fencing Studio for Media Video Feed
+  const { liveDetections: mediaLiveDetections } = useLiveVision(mediaVideoRef, {
+    enabled: showMediaAi && (sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01') && Boolean(mediaVideoSrc),
+    detectionIntervalMs: 80,
+    filterMode: 'ALL_OBJECTS',
+    minConfidence: 0.25,
+    streamId: 'MEDIA_FILE',
+  });
+
+  // Fence Geometry States
   const [fenceType, setFenceType] = useState<FenceGeometryType>('POLYGON');
   const [points, setPoints] = useState<VirtualFencePoint[]>(DEFAULT_POINTS.POLYGON);
   const [heightMeters, setHeightMeters] = useState<number>(4.5);
@@ -64,7 +114,7 @@ export const VirtualFencePage: React.FC = () => {
     const init = async () => {
       const fences = await refreshStoredFences();
       if (fences.length > 0) {
-        const primary = fences[0];
+        const primary = apiService.getActiveFenceSync(sourceTarget) || fences[0];
         loadFenceIntoStudio(primary);
       }
     };
@@ -85,6 +135,125 @@ export const VirtualFencePage: React.FC = () => {
     }
     setIsSavedToDb(true);
     setSelectedPointIndex(null);
+  };
+
+  // Switch between Live Camera, Media Upload, and Tactical Map with distinct fence loading
+  const handleSwitchSourceTarget = (target: FenceSourceTarget) => {
+    setSourceTarget(target);
+    setIsSavedToDb(true);
+
+    // Retrieve active fence specifically assigned to this camera target
+    const assignedFence = apiService.getActiveFenceSync(target);
+    if (assignedFence) {
+      loadFenceIntoStudio(assignedFence);
+    } else {
+      // Find matching stored fence by target
+      const matchingFence = storedFences.find(
+        (f) =>
+          f.sourceTarget === target ||
+          (target === 'MEDIA_FILE' && (f.sourceTarget === 'CAM-LWIR-01' || f.assignedCameras?.includes('MEDIA_FILE'))) ||
+          (target === 'CAM-RGB-01' && (f.sourceTarget === 'CAM-RGB-01' || f.assignedCameras?.includes('CAM-RGB-01'))) ||
+          (target === 'TACTICAL_MAP' && f.sourceTarget === 'TACTICAL_MAP')
+      );
+
+      if (matchingFence) {
+        loadFenceIntoStudio(matchingFence);
+      } else {
+        const defaultId = target === 'MEDIA_FILE' ? 'VF-04' : target === 'CAM-RGB-01' ? 'VF-01' : 'VF-MAP';
+        setCurrentEditingFenceId(defaultId);
+        setZoneName(
+          target === 'MEDIA_FILE'
+            ? 'Highway ANPR Chokepoint & Trap'
+            : target === 'CAM-RGB-01'
+            ? 'Sector 07 Optical Geofence'
+            : 'GIS Satellite Tactical Boundary'
+        );
+        setPoints(DEFAULT_POINTS[fenceType]);
+      }
+    }
+  };
+
+  // Handle local video file upload
+  const handleMediaFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const objectUrl = URL.createObjectURL(file);
+    setMediaVideoSrc(objectUrl);
+    setMediaFileName(file.name);
+    setSelectedPresetId('custom');
+    setMediaPlaying(true);
+
+    if (mediaVideoRef.current) {
+      mediaVideoRef.current.currentTime = 0;
+      mediaVideoRef.current.play().catch(() => setMediaPlaying(false));
+    }
+  };
+
+  const handleSelectPreset = (preset: typeof MEDIA_PRESETS[0]) => {
+    setSelectedPresetId(preset.id);
+    setMediaVideoSrc(preset.url);
+    setMediaFileName(preset.label);
+    setMediaPlaying(true);
+
+    if (mediaVideoRef.current) {
+      mediaVideoRef.current.currentTime = 0;
+      mediaVideoRef.current.play().catch(() => setMediaPlaying(false));
+    }
+  };
+
+  const toggleMediaPlay = () => {
+    if (!mediaVideoRef.current) return;
+    if (mediaVideoRef.current.paused) {
+      mediaVideoRef.current.play().then(() => setMediaPlaying(true)).catch(() => setMediaPlaying(false));
+    } else {
+      mediaVideoRef.current.pause();
+      setMediaPlaying(false);
+    }
+  };
+
+  const handleMediaSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    if (mediaVideoRef.current) {
+      mediaVideoRef.current.currentTime = newTime;
+      setMediaCurrentTime(newTime);
+    }
+  };
+
+  const handleMediaStep = (seconds: number) => {
+    if (mediaVideoRef.current) {
+      const nextTime = Math.max(0, Math.min(mediaDuration, mediaVideoRef.current.currentTime + seconds));
+      mediaVideoRef.current.currentTime = nextTime;
+      setMediaCurrentTime(nextTime);
+    }
+  };
+
+  const handleSpeedChange = (rate: number) => {
+    setMediaSpeed(rate);
+    if (mediaVideoRef.current) {
+      mediaVideoRef.current.playbackRate = rate;
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    if (isNaN(seconds) || seconds < 0) return '00:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Spectral filter CSS style for media
+  const getFilterStyle = (): React.CSSProperties => {
+    switch (mediaSpectralFilter) {
+      case 'FLIR_IRONBOW':
+        return { filter: 'hue-rotate(280deg) saturate(3.5) contrast(1.8) brightness(0.9)' };
+      case 'WHITE_HOT':
+        return { filter: 'grayscale(100%) invert(85%) contrast(2.2) brightness(0.85)' };
+      case 'GREEN_NVG':
+        return { filter: 'sepia(100%) hue-rotate(85deg) saturate(4.0) contrast(1.5) brightness(0.9)' };
+      default:
+        return {};
+    }
   };
 
   // Handle vertex drag interactions
@@ -219,9 +388,19 @@ export const VirtualFencePage: React.FC = () => {
       type: fenceType,
       sourceTarget,
       status: isActive ? 'ACTIVE' : 'INACTIVE',
-      sector: 'Sector 07 (Northern Leh)',
+      sector:
+        sourceTarget === 'MEDIA_FILE'
+          ? 'Media Upload / Stream Corridor'
+          : sourceTarget === 'CAM-RGB-01'
+          ? 'Live Optical Camera Sector 07'
+          : 'Sector 07 (Northern Leh)',
       confidenceThreshold: threshold,
-      assignedCameras: [sourceTarget === 'TACTICAL_MAP' ? 'CAM-RGB-01' : sourceTarget],
+      assignedCameras:
+        sourceTarget === 'MEDIA_FILE'
+          ? ['MEDIA_FILE', 'CAM-LWIR-01', 'CAM-STREAM-02']
+          : sourceTarget === 'TACTICAL_MAP'
+          ? ['CAM-RGB-01', 'TACTICAL_MAP']
+          : ['CAM-RGB-01'],
       points,
       heightMeters: fenceType === '3D_SURROUNDING' ? heightMeters : undefined,
       postgisWkt: wkt,
@@ -236,7 +415,7 @@ export const VirtualFencePage: React.FC = () => {
     await refreshStoredFences();
 
     setSaveNotice(
-      `✅ Virtual Fence [${fenceId}: ${zoneName}] successfully committed to PostgreSQL / PostGIS (trinetra_db) and deployed to live feeds.`
+      `✅ Virtual Fence [${fenceId}: ${zoneName}] committed to PostGIS database for [${sourceTarget}] and deployed to live feeds.`
     );
     setTimeout(() => setSaveNotice(null), 5000);
   };
@@ -301,6 +480,15 @@ export const VirtualFencePage: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4 select-none relative">
+      {/* Hidden File Input for Local Video Selection */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="video/mp4,video/webm,video/ogg,video/quicktime,video/mkv,.mp4,.webm,.mov,.mkv"
+        className="hidden"
+        onChange={handleMediaFileUpload}
+      />
+
       {/* Header Bar */}
       <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -322,13 +510,12 @@ export const VirtualFencePage: React.FC = () => {
 
         {/* Database Stored Configurations Drawer Toggle & Breach Test */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-          {/* Stored Configurations Modal Trigger */}
           <button
             onClick={() => setShowStoredDrawer(true)}
             className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-primary/40 text-primary font-bold transition-all flex items-center gap-1.5 shadow-sm"
           >
             <span className="material-symbols-outlined text-[16px]">database</span>
-            <span>DATABASE CONFIGURATIONS ({storedFences.length})</span>
+            <span>DATABASE PROFILES ({storedFences.length})</span>
           </button>
 
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-container border border-surface-container-high text-outline">
@@ -367,56 +554,131 @@ export const VirtualFencePage: React.FC = () => {
         </div>
       )}
 
-      {/* Stored Configurations Quick Selector Strip */}
-      <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-outline text-[11px] font-bold uppercase flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px] text-primary">inventory_2</span>
-            <span>SAVED TRIPWIRE PROFILES:</span>
+      {/* Separate Active Fences Status Strip (Live Camera vs Media Upload) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs">
+        {/* Live Camera Active Fence Card */}
+        <div
+          onClick={() => handleSwitchSourceTarget('CAM-RGB-01')}
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+            sourceTarget === 'CAM-RGB-01'
+              ? 'bg-primary/10 border-primary shadow-[0_0_15px_rgba(173,198,255,0.18)] ring-1 ring-primary/40'
+              : 'bg-surface-container-low border-surface-container-high hover:border-outline'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${sourceTarget === 'CAM-RGB-01' ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container text-primary'}`}>
+              <span className="material-symbols-outlined text-xl">videocam</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-headline font-bold text-on-surface text-[12px] uppercase flex items-center gap-1.5">
+                <span>📹 LIVE OPTICAL CAMERA FENCE</span>
+                {sourceTarget === 'CAM-RGB-01' && (
+                  <span className="px-1.5 py-0.2 rounded bg-primary text-on-primary text-[9px] font-bold">
+                    EDITING NOW
+                  </span>
+                )}
+              </span>
+              <span className="text-[10px] text-outline">
+                ACTIVE PROFILE: {apiService.getActiveFenceSync('CAM-RGB-01')?.name || 'Sector 07 Zone Alpha'} [{apiService.getActiveFenceSync('CAM-RGB-01')?.type || 'POLYGON'}]
+              </span>
+            </div>
+          </div>
+          <span className={`text-[11px] font-bold ${sourceTarget === 'CAM-RGB-01' ? 'text-primary' : 'text-outline'}`}>
+            {sourceTarget === 'CAM-RGB-01' ? '● CURRENT IN STUDIO' : 'CLICK TO EDIT ➔'}
+          </span>
+        </div>
+
+        {/* Media Upload Active Fence Card */}
+        <div
+          onClick={() => handleSwitchSourceTarget('MEDIA_FILE')}
+          className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+            sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01'
+              ? 'bg-tertiary/10 border-tertiary shadow-[0_0_15px_rgba(255,180,168,0.18)] ring-1 ring-tertiary/40'
+              : 'bg-surface-container-low border-surface-container-high hover:border-outline'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01' ? 'bg-tertiary text-on-tertiary shadow-sm' : 'bg-surface-container text-tertiary'}`}>
+              <span className="material-symbols-outlined text-xl">movie</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-headline font-bold text-on-surface text-[12px] uppercase flex items-center gap-1.5">
+                <span>🎬 MEDIA UPLOAD / STREAM FENCE</span>
+                {(sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01') && (
+                  <span className="px-1.5 py-0.2 rounded bg-tertiary text-on-tertiary text-[9px] font-bold">
+                    EDITING NOW
+                  </span>
+                )}
+              </span>
+              <span className="text-[10px] text-outline">
+                ACTIVE PROFILE: {apiService.getActiveFenceSync('MEDIA_FILE')?.name || 'Highway ANPR Chokepoint'} [{apiService.getActiveFenceSync('MEDIA_FILE')?.type || 'POLYGON'}]
+              </span>
+            </div>
+          </div>
+          <span className={`text-[11px] font-bold ${sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01' ? 'text-tertiary' : 'text-outline'}`}>
+            {sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01' ? '● CURRENT IN STUDIO' : 'CLICK TO EDIT ➔'}
+          </span>
+        </div>
+      </div>
+
+      {/* Primary Target Mode Switcher (Live Camera vs Media Upload vs GIS Map) */}
+      <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-outline text-[11px] font-bold uppercase flex items-center gap-1 mr-1">
+            <span className="material-symbols-outlined text-[16px] text-primary">tune</span>
+            <span>SELECT FENCE EDITING TARGET:</span>
           </span>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            {storedFences.map((f) => {
-              const isLoaded = f.id === currentEditingFenceId;
-              const isGloballyActive = f.id === activeFenceId;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => loadFenceIntoStudio(f)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 border transition-all ${
-                    isLoaded
-                      ? 'bg-primary/20 text-primary border-primary font-bold shadow-sm'
-                      : 'bg-surface-container-lowest text-outline hover:text-on-surface border-surface-container-high'
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isGloballyActive ? 'bg-secondary animate-pulse' : 'bg-outline'
-                    }`}
-                  />
-                  <span>{f.name}</span>
-                  <span className="text-[9px] opacity-70">[{f.type || 'POLYGON'}]</span>
-                </button>
-              );
-            })}
+          <div className="flex items-center bg-surface-container-lowest p-1 rounded-xl border border-surface-container-high">
+            {/* Live Camera Option */}
+            <button
+              onClick={() => handleSwitchSourceTarget('CAM-RGB-01')}
+              className={`px-3 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-2 ${
+                sourceTarget === 'CAM-RGB-01'
+                  ? 'bg-primary text-on-primary font-bold shadow-md'
+                  : 'text-outline hover:text-on-surface'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">videocam</span>
+              <span>📹 LIVE CAMERA (WEBCAM)</span>
+            </button>
+
+            {/* Media Upload / Video Stream Option */}
+            <button
+              onClick={() => handleSwitchSourceTarget('MEDIA_FILE')}
+              className={`px-3 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-2 ${
+                sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01'
+                  ? 'bg-tertiary text-on-tertiary font-bold shadow-md'
+                  : 'text-outline hover:text-tertiary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">movie</span>
+              <span>🎬 MEDIA UPLOAD / RECORDED VIDEO</span>
+            </button>
+
+            {/* Tactical GIS Map Option */}
+            <button
+              onClick={() => handleSwitchSourceTarget('TACTICAL_MAP')}
+              className={`px-3 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-2 ${
+                sourceTarget === 'TACTICAL_MAP'
+                  ? 'bg-secondary text-on-secondary font-bold shadow-md'
+                  : 'text-outline hover:text-secondary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">map</span>
+              <span>🗺️ TACTICAL GIS MAP</span>
+            </button>
           </div>
         </div>
 
+        {/* Active Profile Status */}
         <div className="flex items-center gap-2">
-          {currentEditingFenceId !== activeFenceId ? (
-            <button
-              onClick={() => handleActivateFence(currentEditingFenceId)}
-              className="px-2.5 py-1 rounded-lg bg-secondary text-on-secondary font-bold text-[11px] hover:bg-secondary/90 transition-all flex items-center gap-1 shadow-sm"
-            >
-              <span className="material-symbols-outlined text-[14px]">bolt</span>
-              <span>ACTIVATE IN LIVE SURVEILLANCE</span>
-            </button>
-          ) : (
-            <span className="px-2.5 py-1 rounded-lg bg-secondary/10 border border-secondary/40 text-secondary text-[10px] font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-ping" />
-              <span>LIVE ACTIVE TRIPWIRE</span>
-            </span>
-          )}
+          <span className="text-outline text-[11px]">ACTIVE PROFILE:</span>
+          <span className="px-2.5 py-1 rounded-lg bg-surface-container-lowest border border-primary/30 text-primary font-bold text-[11px] flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+            <span>{zoneName}</span>
+            <span className="text-[10px] opacity-75">[{currentEditingFenceId}]</span>
+          </span>
         </div>
       </div>
 
@@ -424,105 +686,112 @@ export const VirtualFencePage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Interactive Canvas Editor Stage (7 cols) */}
         <div className="lg:col-span-7 flex flex-col gap-3">
-          {/* Source Target Selector & Geometry Mode Toolbar */}
+          {/* Geometry Mode & Geometry Presets Bar */}
           <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
-            {/* Camera Feed Source Selector */}
+            {/* Geometry Mode Selector */}
             <div className="flex items-center gap-1">
-              <span className="text-outline text-[10px] uppercase font-bold mr-1">FEED SOURCE:</span>
+              <span className="text-outline text-[10px] uppercase font-bold mr-1">SHAPE MODE:</span>
               <div className="flex items-center bg-surface-container rounded-lg p-0.5 border border-surface-container-high text-[11px]">
                 <button
-                  onClick={() => {
-                    setSourceTarget('CAM-RGB-01');
-                    setIsSavedToDb(false);
-                  }}
+                  onClick={() => handleSwitchFenceType('TRIPWIRE')}
                   className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
-                    sourceTarget === 'CAM-RGB-01'
+                    fenceType === 'TRIPWIRE'
                       ? 'bg-primary text-on-primary font-bold shadow-sm'
                       : 'text-outline hover:text-on-surface'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[14px]">videocam</span>
-                  <span>LAPTOP RGB</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setSourceTarget('CAM-LWIR-01');
-                    setIsSavedToDb(false);
-                  }}
-                  className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
-                    sourceTarget === 'CAM-LWIR-01'
-                      ? 'bg-tertiary text-on-tertiary font-bold shadow-sm'
-                      : 'text-outline hover:text-tertiary'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">podcasts</span>
-                  <span>LIVE STREAM</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setSourceTarget('TACTICAL_MAP');
-                    setIsSavedToDb(false);
-                  }}
-                  className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
-                    sourceTarget === 'TACTICAL_MAP'
-                      ? 'bg-secondary text-on-secondary font-bold shadow-sm'
-                      : 'text-outline hover:text-secondary'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[14px]">map</span>
-                  <span>GIS MAP</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Geometry Mode Selector */}
-            <div className="flex items-center gap-1">
-              <span className="text-outline text-[10px] uppercase font-bold mr-1">GEOMETRY:</span>
-              <div className="flex items-center bg-surface-container rounded-lg p-0.5 border border-surface-container-high text-[11px]">
-                <button
-                  onClick={() => handleSwitchFenceType('TRIPWIRE')}
-                  className={`px-2 py-1 rounded-md transition-all font-semibold ${
-                    fenceType === 'TRIPWIRE'
-                      ? 'bg-primary/20 text-primary font-bold border border-primary/40'
-                      : 'text-outline hover:text-on-surface'
-                  }`}
-                >
-                  TRIPWIRE
+                  <span className="material-symbols-outlined text-[13px]">timeline</span>
+                  <span>TRIPWIRE</span>
                 </button>
                 <button
                   onClick={() => handleSwitchFenceType('POLYGON')}
-                  className={`px-2 py-1 rounded-md transition-all font-semibold ${
+                  className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
                     fenceType === 'POLYGON'
-                      ? 'bg-primary/20 text-primary font-bold border border-primary/40'
+                      ? 'bg-primary text-on-primary font-bold shadow-sm'
                       : 'text-outline hover:text-on-surface'
                   }`}
                 >
-                  2D POLYGON
+                  <span className="material-symbols-outlined text-[13px]">polyline</span>
+                  <span>2D POLYGON</span>
                 </button>
                 <button
                   onClick={() => handleSwitchFenceType('3D_SURROUNDING')}
-                  className={`px-2 py-1 rounded-md transition-all font-semibold ${
+                  className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
                     fenceType === '3D_SURROUNDING'
-                      ? 'bg-primary/20 text-primary font-bold border border-primary/40'
+                      ? 'bg-primary text-on-primary font-bold shadow-sm'
                       : 'text-outline hover:text-on-surface'
                   }`}
                 >
-                  3D CUBE
+                  <span className="material-symbols-outlined text-[13px]">view_in_ar</span>
+                  <span>3D CUBE</span>
                 </button>
               </div>
             </div>
+
+            {/* Reset / Add Node Instructions */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-outline font-semibold">
+                {points.length} VERTICES (MAX 8)
+              </span>
+              <button
+                onClick={() => setPoints(DEFAULT_POINTS[fenceType])}
+                className="px-2 py-1 rounded bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-outline hover:text-on-surface text-[10px] font-semibold transition-colors flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[12px]">restart_alt</span>
+                <span>RESET NODES</span>
+              </button>
+            </div>
           </div>
 
-          {/* Interactive Drawing Canvas Stage */}
-          <div className="relative w-full h-[460px] sm:h-[520px] rounded-xl overflow-hidden border border-surface-container-high/70 bg-surface-container-lowest shadow-tactical-extruded group">
-            {/* Background Feed Media */}
+          {/* Interactive Drawing Canvas Stage - Clean and Unobstructed */}
+          <div className="relative w-full h-[460px] sm:h-[520px] rounded-xl overflow-hidden border border-surface-container-high/70 bg-black shadow-tactical-extruded group select-none">
+            {/* Background Feed Media: Clean, without any disturbing UI controls */}
             <div className="absolute inset-0 w-full h-full pointer-events-none">
               {sourceTarget === 'CAM-RGB-01' ? (
                 <WebcamFeed showDetection={false} />
-              ) : sourceTarget === 'CAM-LWIR-01' ? (
-                <VideoStreamFeed showDetection={false} />
+              ) : sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01' ? (
+                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                  <video
+                    ref={mediaVideoRef}
+                    src={mediaVideoSrc}
+                    playsInline
+                    loop={mediaLoop}
+                    muted={mediaMuted}
+                    onPlay={() => setMediaPlaying(true)}
+                    onPause={() => setMediaPlaying(false)}
+                    onTimeUpdate={() => {
+                      if (mediaVideoRef.current) {
+                        setMediaCurrentTime(mediaVideoRef.current.currentTime);
+                      }
+                    }}
+                    onLoadedMetadata={() => {
+                      if (mediaVideoRef.current) {
+                        setMediaDuration(mediaVideoRef.current.duration || 0);
+                        mediaVideoRef.current.playbackRate = mediaSpeed;
+                        if (mediaPlaying) {
+                          mediaVideoRef.current.play().catch(() => setMediaPlaying(false));
+                        }
+                      }
+                    }}
+                    style={getFilterStyle()}
+                    className="w-full h-full object-cover transition-all duration-300"
+                  />
+                  {/* Subtle thermal scanlines if NVG/FLIR active */}
+                  {mediaSpectralFilter !== 'OPTICAL' && (
+                    <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle,transparent_60%,rgba(0,0,0,0.85)_100%)] opacity-80" />
+                  )}
+
+                  {/* Real-time AI Detections & Bounding Boxes in Studio */}
+                  {showMediaAi &&
+                    mediaLiveDetections.map((det) => (
+                      <DetectionOverlay
+                        key={det.id}
+                        liveDetection={det}
+                        isBreached={det.isTripwireBreach}
+                        isThermal={mediaSpectralFilter !== 'OPTICAL'}
+                      />
+                    ))}
+                </div>
               ) : (
                 <TacticalMapViewer interactive={false} compact={true} />
               )}
@@ -559,8 +828,8 @@ export const VirtualFencePage: React.FC = () => {
                 </filter>
               </defs>
 
-              {/* Grid Overlay Lines */}
-              <g stroke="rgba(173,198,255,0.06)" strokeWidth="1" strokeDasharray="4,4">
+              {/* Clean Subdued Grid Overlay Lines */}
+              <g stroke="rgba(173,198,255,0.08)" strokeWidth="1" strokeDasharray="4,4">
                 <line x1="200" y1="0" x2="200" y2="500" />
                 <line x1="400" y1="0" x2="400" y2="500" />
                 <line x1="600" y1="0" x2="600" y2="500" />
@@ -647,7 +916,7 @@ export const VirtualFencePage: React.FC = () => {
                     fill={
                       isFenceBreached
                         ? 'rgba(255, 84, 73, 0.25)'
-                        : 'rgba(56, 189, 248, 0.12)'
+                        : 'rgba(56, 189, 248, 0.15)'
                     }
                     stroke={isFenceBreached ? '#ff5449' : '#38bdf8'}
                     strokeWidth="2.5"
@@ -672,40 +941,40 @@ export const VirtualFencePage: React.FC = () => {
                   <circle
                     cx={pt.x * 8}
                     cy={pt.y * 5}
-                    r={selectedPointIndex === idx ? 13 : 9}
+                    r={selectedPointIndex === idx ? 14 : 10}
                     fill="none"
                     stroke={isFenceBreached ? '#ff5449' : '#38bdf8'}
-                    strokeWidth="1.5"
-                    opacity={selectedPointIndex === idx ? 0.9 : 0.6}
+                    strokeWidth="2"
+                    opacity={selectedPointIndex === idx ? 1.0 : 0.75}
                     className="group-hover/node:scale-125 transition-transform"
                   />
                   {/* Inner Solid Handle Dot */}
                   <circle
                     cx={pt.x * 8}
                     cy={pt.y * 5}
-                    r="5"
+                    r="6"
                     fill={selectedPointIndex === idx ? '#ffffff' : isFenceBreached ? '#ff5449' : '#38bdf8'}
                     stroke="#0a0e16"
-                    strokeWidth="1.5"
+                    strokeWidth="2"
                   />
 
                   {/* Node Label Tooltip */}
                   <rect
-                    x={pt.x * 8 + 8}
+                    x={pt.x * 8 + 10}
                     y={pt.y * 5 - 20}
-                    width="68"
-                    height="18"
-                    rx="3"
+                    width="74"
+                    height="20"
+                    rx="4"
                     fill="#0a0e16"
                     stroke={isFenceBreached ? '#ff5449' : '#38bdf8'}
-                    strokeWidth="1"
-                    opacity="0.85"
+                    strokeWidth="1.2"
+                    opacity="0.9"
                   />
                   <text
-                    x={pt.x * 8 + 12}
-                    y={pt.y * 5 - 8}
+                    x={pt.x * 8 + 15}
+                    y={pt.y * 5 - 6}
                     fill="#dfe2ed"
-                    fontSize="9"
+                    fontSize="9.5"
                     fontFamily="JetBrains Mono"
                     fontWeight="bold"
                   >
@@ -715,6 +984,15 @@ export const VirtualFencePage: React.FC = () => {
               ))}
             </svg>
 
+            {/* Canvas Header Tag - Source Indicator */}
+            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-surface-container-lowest/90 backdrop-blur border border-surface-container-high/80 font-mono text-[11px] text-on-surface flex items-center gap-2 shadow-md">
+              <span className={`w-2 h-2 rounded-full ${sourceTarget === 'CAM-RGB-01' ? 'bg-primary' : sourceTarget === 'MEDIA_FILE' ? 'bg-tertiary' : 'bg-secondary'} animate-pulse`} />
+              <span className="font-bold uppercase tracking-wider">
+                {sourceTarget === 'CAM-RGB-01' ? 'LIVE OPTICAL FEED' : sourceTarget === 'MEDIA_FILE' ? 'RECORDED MEDIA STREAM' : 'GIS VECTOR MAP'}
+              </span>
+              <span className="text-outline text-[10px]">· {points.length} NODES</span>
+            </div>
+
             {/* Canvas Bottom Interactive Tip */}
             <div className="absolute bottom-2.5 left-2.5 right-2.5 p-2 rounded-lg bg-surface-container-lowest/90 backdrop-blur border border-surface-container-high/60 flex items-center justify-between font-mono text-[11px] text-outline shadow-md">
               <span className="flex items-center gap-1.5 text-on-surface">
@@ -722,10 +1000,198 @@ export const VirtualFencePage: React.FC = () => {
                 <span>Click & drag handles to reshape boundary · Click canvas to add node</span>
               </span>
               <span className="text-secondary font-bold">
-                {points.length} ACTIVE VERTICES · ID: {currentEditingFenceId}
+                ID: {currentEditingFenceId} · {fenceType}
               </span>
             </div>
           </div>
+
+          {/* Dedicated Media Feed Control Toolbar (Visible when Media Upload mode is selected) */}
+          {(sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01') && (
+            <div className="p-4 rounded-xl bg-surface-container-low border border-tertiary/30 shadow-tactical-plate flex flex-col gap-3 font-mono text-xs">
+              {/* Media Header & Upload / Preset Selector */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-container-high/60 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-tertiary text-lg">video_file</span>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-on-surface text-[12px] uppercase">
+                      Media Backdrop Stream
+                    </span>
+                    <span className="text-[10px] text-outline truncate max-w-[280px]">
+                      {mediaFileName}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Live AI Detection Toggle */}
+                  <button
+                    onClick={() => setShowMediaAi(!showMediaAi)}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1.5 shadow-sm border ${
+                      showMediaAi
+                        ? 'bg-primary/20 text-primary border-primary/50'
+                        : 'bg-surface-container text-outline hover:text-on-surface border-surface-container-high'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">
+                      {showMediaAi ? 'radar' : 'visibility_off'}
+                    </span>
+                    <span>AI DETECTION: {showMediaAi ? 'ON' : 'OFF'}</span>
+                  </button>
+
+                  {/* Upload File Button */}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-lg bg-tertiary text-on-tertiary font-bold text-[11px] hover:bg-tertiary/90 transition-all flex items-center gap-1.5 shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">upload_file</span>
+                    <span>UPLOAD VIDEO</span>
+                  </button>
+
+                  {/* Spectral Filter Switcher */}
+                  <div className="flex items-center bg-surface-container rounded-lg p-0.5 border border-surface-container-high text-[10px]">
+                    <button
+                      onClick={() => setMediaSpectralFilter('OPTICAL')}
+                      className={`px-2 py-1 rounded transition-colors ${
+                        mediaSpectralFilter === 'OPTICAL'
+                          ? 'bg-primary text-on-primary font-bold'
+                          : 'text-outline hover:text-on-surface'
+                      }`}
+                    >
+                      OPTICAL
+                    </button>
+                    <button
+                      onClick={() => setMediaSpectralFilter('FLIR_IRONBOW')}
+                      className={`px-2 py-1 rounded transition-colors ${
+                        mediaSpectralFilter === 'FLIR_IRONBOW'
+                          ? 'bg-orange-500 text-white font-bold'
+                          : 'text-outline hover:text-on-surface'
+                      }`}
+                    >
+                      FLIR
+                    </button>
+                    <button
+                      onClick={() => setMediaSpectralFilter('GREEN_NVG')}
+                      className={`px-2 py-1 rounded transition-colors ${
+                        mediaSpectralFilter === 'GREEN_NVG'
+                          ? 'bg-emerald-500 text-white font-bold'
+                          : 'text-outline hover:text-on-surface'
+                      }`}
+                    >
+                      NVG
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tactical Video Presets Bar */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-outline uppercase font-semibold mr-1">
+                  DEMO FOOTAGE PRESETS:
+                </span>
+                {MEDIA_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => handleSelectPreset(preset)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 border ${
+                      selectedPresetId === preset.id
+                        ? 'bg-tertiary/20 text-tertiary border-tertiary/60 font-bold'
+                        : 'bg-surface-container-lowest text-outline hover:text-on-surface border-surface-container-high'
+                    }`}
+                  >
+                    <span>{preset.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Video Playback Transport Controls */}
+              <div className="p-2.5 rounded-lg bg-surface-container-lowest border border-surface-container-high flex flex-wrap items-center justify-between gap-3">
+                {/* Play / Pause / Step Controls */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={toggleMediaPlay}
+                    className="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary flex items-center justify-center transition-colors shadow-sm"
+                    title={mediaPlaying ? 'Pause (Freeze frame to align fence)' : 'Play'}
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      {mediaPlaying ? 'pause' : 'play_arrow'}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => handleMediaStep(-1)}
+                    className="w-7 h-7 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors"
+                    title="Step back 1 second"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">replay_5</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleMediaStep(1)}
+                    className="w-7 h-7 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors"
+                    title="Step forward 1 second"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">forward_5</span>
+                  </button>
+
+                  <span className="text-[11px] text-on-surface font-mono font-bold ml-1">
+                    {formatTime(mediaCurrentTime)} / {formatTime(mediaDuration)}
+                  </span>
+                </div>
+
+                {/* Progress Scrubber */}
+                <div className="flex-1 min-w-[140px] flex items-center">
+                  <input
+                    type="range"
+                    min="0"
+                    max={mediaDuration || 100}
+                    step="0.1"
+                    value={mediaCurrentTime}
+                    onChange={handleMediaSeek}
+                    className="w-full h-1.5 bg-surface-container-high rounded-lg appearance-none cursor-pointer accent-tertiary"
+                  />
+                </div>
+
+                {/* Speed & Audio Toggles */}
+                <div className="flex items-center gap-1 text-[10px]">
+                  {([0.5, 1.0, 2.0] as const).map((rate) => (
+                    <button
+                      key={rate}
+                      onClick={() => handleSpeedChange(rate)}
+                      className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
+                        mediaSpeed === rate
+                          ? 'bg-tertiary text-on-tertiary'
+                          : 'bg-surface-container text-outline hover:text-on-surface'
+                      }`}
+                    >
+                      {rate}x
+                    </button>
+                  ))}
+
+                  <button
+                    onClick={() => setMediaMuted(!mediaMuted)}
+                    className={`w-6 h-6 rounded flex items-center justify-center transition-colors ml-1 ${
+                      mediaMuted ? 'text-outline' : 'text-primary'
+                    }`}
+                    title={mediaMuted ? 'Unmute' : 'Mute'}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">
+                      {mediaMuted ? 'volume_off' : 'volume_up'}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setMediaLoop(!mediaLoop)}
+                    className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+                      mediaLoop ? 'text-tertiary' : 'text-outline'
+                    }`}
+                    title={mediaLoop ? 'Loop: Enabled' : 'Loop: Disabled'}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">repeat</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Configuration Controls & PostGIS Parameters (5 cols) */}
@@ -745,7 +1211,7 @@ export const VirtualFencePage: React.FC = () => {
                   className="font-headline text-sm font-bold text-on-surface uppercase bg-transparent border-b border-dashed border-outline focus:border-primary focus:outline-none"
                 />
                 <span className="font-mono text-[11px] text-outline mt-0.5">
-                  POSTGIS GEOMETRY ID: {currentEditingFenceId}
+                  POSTGIS GEOMETRY ID: {currentEditingFenceId} · TARGET: {sourceTarget}
                 </span>
               </div>
 
@@ -763,7 +1229,7 @@ export const VirtualFencePage: React.FC = () => {
 
             {/* Quick Shape Presets */}
             <div className="flex flex-col gap-1.5 font-mono text-xs">
-              <span className="text-outline uppercase text-[11px] font-semibold">Geometry Presets:</span>
+              <span className="text-outline uppercase text-[11px] font-semibold">Geometry Shape Presets:</span>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleApplyPreset('CENTER')}

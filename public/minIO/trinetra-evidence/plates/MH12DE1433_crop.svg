@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" width="480" height="160">
+  <rect x="4" y="4" width="472" height="152" rx="12" fill="#ffffff" stroke="#1e293b" stroke-width="6"/>
+  <rect x="12" y="12" width="456" height="136" rx="8" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+
+  <!-- IND Blue Strip -->
+  <rect x="14" y="14" width="48" height="132" rx="6" fill="#003399"/>
+  <circle cx="38" cy="45" r="14" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="38" cy="45" r="3" fill="#ffffff"/>
+  <text x="38" y="105" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="900" text-anchor="middle">IND</text>
+
+  <!-- High Security Hologram Tag -->
+  <rect x="75" y="25" width="22" height="22" rx="3" fill="#94a3b8" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="86" y="40" fill="#0f172a" font-family="monospace" font-size="9" font-weight="bold" text-anchor="middle">HSRP</text>
+
+  <!-- Embossed Plate Characters -->
+  <text x="270" y="105" fill="#0f172a" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="56" font-weight="900" letter-spacing="6" text-anchor="middle">
+    MH 12 DE 1433
+  </text>
+
+  <text x="450" y="135" fill="#64748b" font-family="monospace" font-size="9" font-weight="bold" text-anchor="end">
+    TRINETRA-ANPR-97.2%
+  </text>
+</svg>
