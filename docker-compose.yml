@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════
-# ANTIGRAVITY — Docker Compose
+# TRINETRA — Docker Compose
 # Edge-AI Surveillance & Tactical Threat Interception
 # ══════════════════════════════════════════════════════════════
 # Usage: docker compose up --build
@@ -9,7 +9,7 @@ services:
   # ── PostgreSQL + PostGIS ──
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: antigravity-postgres
+    container_name: trinetra-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -29,7 +29,7 @@ services:
   # ── Redis ──
   redis:
     image: redis:7-alpine
-    container_name: antigravity-redis
+    container_name: trinetra-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -44,7 +44,7 @@ services:
   # ── MinIO (S3-compatible Object Storage) ──
   minio:
     image: minio/minio:latest
-    container_name: antigravity-minio
+    container_name: trinetra-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -64,7 +64,7 @@ services:
   # ── Mosquitto MQTT Broker ──
   mosquitto:
     image: eclipse-mosquitto:2
-    container_name: antigravity-mosquitto
+    container_name: trinetra-mosquitto
     restart: unless-stopped
     ports:
       - "1883:1883"
@@ -83,7 +83,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    container_name: antigravity-backend
+    container_name: trinetra-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -117,7 +117,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.edge
-    container_name: antigravity-edge
+    container_name: trinetra-edge
     restart: unless-stopped
     env_file:
       - .env
@@ -140,7 +140,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    container_name: antigravity-frontend
+    container_name: trinetra-frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -151,7 +151,7 @@ services:
       backend:
         condition: service_healthy
     volumes:
-      - ./frontend/src:/app/src
+      - ./src:/app/src
 
 volumes:
   postgres_data:
