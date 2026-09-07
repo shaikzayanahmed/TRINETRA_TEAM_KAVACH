@@ -1,6 +1,7 @@
 import { AnprRecord } from '../types';
 import { anprService } from './anprService';
 import { yoloService } from './yoloService';
+import { BBoxOneEuroFilter } from '../utils/oneEuroFilter';
 
 export type DetectionFilterMode = 'MOVING_VEHICLES' | 'ALL_VEHICLES' | 'ALL_OBJECTS';
 
@@ -30,6 +31,7 @@ export interface LiveDetectionResult {
   speedKmh: number;
   bearingLabel: string;
   engine: 'YOLOv8';
+  isCoasting?: boolean;
 }
 
 interface TrackHistoryPoint {
@@ -57,6 +59,9 @@ interface ActiveTrack {
   speedKmh: number;
   bearingLabel: string;
   frameSeenCount: number;
+  missedFrames: number;
+  bboxFilter: BBoxOneEuroFilter;
+  lastRawBbox: [number, number, number, number];
 }
 
 const VEHICLE_CLASSES = new Set(['CAR', 'TRUCK', 'BUS', 'MOTORCYCLE']);
@@ -77,7 +82,7 @@ class VisionAiService {
 
     this.isLoading = true;
     try {
-      console.log('[VisionAiService] Initializing exclusive YOLOv8 detection engine...');
+      console.log('[VisionAiService] Initializing exclusive YOLOv8 detection engine with One-Euro smoothing...');
       const ready = await yoloService.loadYoloModel();
       this.isReady = ready;
       this.isLoading = false;
@@ -112,7 +117,7 @@ class VisionAiService {
   /**
    * Assign or match persistent tracking IDs using spatial centroid proximity,
    * calculates motion displacement vectors, velocity, still duration, and only triggers ANPR
-   * for moving vehicles with EMA coordinate smoothing.
+   * for moving vehicles with adaptive One-Euro coordinate filtering (zero jitter).
    */
   private matchOrCreateTrack(
     className: string,
@@ -161,25 +166,27 @@ class VisionAiService {
     }
 
     if (bestTrackId && this.activeTracks.has(bestTrackId)) {
-      // Update existing persistent track with EMA coordinate smoothing (Alpha = 0.70)
+      // Update existing persistent track with adaptive One-Euro coordinate filtering
       const existing = this.activeTracks.get(bestTrackId)!;
-      const alpha = 0.70;
+      existing.missedFrames = 0;
+      existing.lastRawBbox = rawBbox;
 
-      const smoothedCx = alpha * cx + (1 - alpha) * existing.cx;
-      const smoothedCy = alpha * cy + (1 - alpha) * existing.cy;
-      const smoothedW = alpha * normW + (1 - alpha) * existing.width;
-      const smoothedH = alpha * normH + (1 - alpha) * existing.height;
+      // Filter bbox coordinates with dynamic frequency cutoff
+      const smoothed = existing.bboxFilter.filter(normX, normY, normW, normH, now);
+
+      const smoothedCx = smoothed.x + smoothed.width / 2;
+      const smoothedCy = smoothed.y + smoothed.height / 2;
 
       existing.history.push({ cx: smoothedCx, cy: smoothedCy, time: now });
-      if (existing.history.length > 10) {
+      if (existing.history.length > 12) {
         existing.history.shift();
       }
 
       existing.frameSeenCount += 1;
       existing.cx = smoothedCx;
       existing.cy = smoothedCy;
-      existing.width = smoothedW;
-      existing.height = smoothedH;
+      existing.width = smoothed.width;
+      existing.height = smoothed.height;
       existing.score = score;
       existing.lastSeenMs = now;
 
@@ -196,8 +203,8 @@ class VisionAiService {
         const timeDeltaSec = Math.max(0.04, (now - oldest.time) / 1000);
         const velocityPctPerSec = totalDisplacement / timeDeltaSec;
 
-        // Motion threshold
-        isMoving = totalDisplacement >= 0.30 || velocityPctPerSec >= 0.25;
+        // Motion threshold (0.28% displacement or 0.22%/sec)
+        isMoving = totalDisplacement >= 0.28 || velocityPctPerSec >= 0.22;
 
         if (isMoving) {
           speedKmh = Math.min(110, Math.max(24, Math.round(velocityPctPerSec * 6.5 + 28)));
@@ -244,9 +251,6 @@ class VisionAiService {
         existing.anpr = undefined;
       }
 
-      const smoothedX = Math.max(0, smoothedCx - smoothedW / 2);
-      const smoothedY = Math.max(0, smoothedCy - smoothedH / 2);
-
       return {
         id: existing.id,
         anpr: anprRecord,
@@ -257,10 +261,10 @@ class VisionAiService {
         speedKmh,
         bearingLabel,
         smoothedBbox: {
-          x: smoothedX,
-          y: smoothedY,
-          width: smoothedW,
-          height: smoothedH,
+          x: Math.max(0, smoothed.x),
+          y: Math.max(0, smoothed.y),
+          width: smoothed.width,
+          height: smoothed.height,
         },
       };
     }
@@ -282,6 +286,9 @@ class VisionAiService {
       initialAnpr.bearing = 'EASTBOUND [E]';
     }
 
+    const filter = new BBoxOneEuroFilter(0.7, 0.04);
+    const initialSmoothed = filter.filter(normX, normY, normW, normH, now);
+
     const newTrack: ActiveTrack = {
       id: newId,
       class: upperClass,
@@ -301,6 +308,9 @@ class VisionAiService {
       speedKmh: isVehicle ? 52 : 5,
       bearingLabel: 'ACQUIRING...',
       frameSeenCount: 1,
+      missedFrames: 0,
+      bboxFilter: filter,
+      lastRawBbox: rawBbox,
     };
 
     this.activeTracks.set(newId, newTrack);
@@ -315,20 +325,20 @@ class VisionAiService {
       speedKmh: newTrack.speedKmh,
       bearingLabel: newTrack.bearingLabel,
       smoothedBbox: {
-        x: Math.max(0, normX),
-        y: Math.max(0, normY),
-        width: normW,
-        height: normH,
+        x: Math.max(0, initialSmoothed.x),
+        y: Math.max(0, initialSmoothed.y),
+        width: initialSmoothed.width,
+        height: initialSmoothed.height,
       },
     };
   }
 
   /**
-   * Prune inactive tracks not seen in over 1.8 seconds
+   * Prune inactive tracks not seen in over 1.2 seconds or missed over 5 consecutive cycles
    */
   private pruneInactiveTracks(now: number) {
     for (const [id, track] of this.activeTracks.entries()) {
-      if (now - track.lastSeenMs > 1800) {
+      if (now - track.lastSeenMs > 1200 || track.missedFrames > 5) {
         this.activeTracks.delete(id);
       }
     }
@@ -359,9 +369,7 @@ class VisionAiService {
       const rawPredictions = await yoloService.detect(videoElement, minConfidence);
       const inferenceTimeMs = Math.round(performance.now() - startTime);
 
-      // Clean up stale tracks
-      this.pruneInactiveTracks(now);
-
+      const matchedTrackIds = new Set<string>();
       const mappedResults: LiveDetectionResult[] = [];
 
       for (const pred of rawPredictions) {
@@ -395,7 +403,7 @@ class VisionAiService {
           (normH / 100) * srcHeight,
         ];
 
-        // Assign persistent unique tracking ID with EMA smoothing
+        // Assign persistent unique tracking ID with One-Euro smoothing
         const {
           id: targetId,
           anpr,
@@ -416,6 +424,8 @@ class VisionAiService {
           now,
           videoElement
         );
+
+        matchedTrackIds.add(targetId);
 
         if (filterMode === 'MOVING_VEHICLES' && (!isVehicle || (!isMoving && !isSuspiciousStill))) {
           continue;
@@ -442,8 +452,58 @@ class VisionAiService {
           speedKmh,
           bearingLabel,
           engine: 'YOLOv8',
+          isCoasting: false,
         });
       }
+
+      // Track Hysteresis / Anti-Flicker: Coast established tracks missed in current frame
+      for (const [trackId, track] of this.activeTracks.entries()) {
+        if (!matchedTrackIds.has(trackId)) {
+          track.missedFrames += 1;
+
+          // If track was well-established and missed for <= 3 consecutive frames, coast with smooth filtering
+          if (track.frameSeenCount >= 2 && track.missedFrames <= 3 && (now - track.lastSeenMs <= 380)) {
+            const isVehicle = VEHICLE_CLASSES.has(track.class);
+            if (filterMode === 'MOVING_VEHICLES' && (!isVehicle || (!track.isMoving && !track.isSuspiciousStill))) {
+              continue;
+            }
+
+            const currentX = track.cx - track.width / 2;
+            const currentY = track.cy - track.height / 2;
+            const smoothed = track.bboxFilter.filter(currentX, currentY, track.width, track.height, now);
+            const centerX = smoothed.x + smoothed.width / 2;
+            const centerY = smoothed.y + smoothed.height / 2;
+            const isTripwireBreach = centerX > 38 && centerX < 88 && centerY > 20 && centerY < 85;
+
+            mappedResults.push({
+              id: track.id,
+              class: track.class,
+              score: Math.max(10, Math.round(track.score * 0.92)),
+              bbox: {
+                x: Math.round(smoothed.x * 100) / 100,
+                y: Math.round(smoothed.y * 100) / 100,
+                width: Math.round(smoothed.width * 100) / 100,
+                height: Math.round(smoothed.height * 100) / 100,
+                raw: track.lastRawBbox,
+              },
+              isTripwireBreach,
+              inferenceTimeMs,
+              anpr: track.anpr,
+              isVehicle,
+              isMoving: track.isMoving,
+              isSuspiciousStill: track.isSuspiciousStill,
+              stillDurationSeconds: track.stillDurationSeconds,
+              speedKmh: track.speedKmh,
+              bearingLabel: track.bearingLabel,
+              engine: 'YOLOv8',
+              isCoasting: true,
+            });
+          }
+        }
+      }
+
+      // Clean up stale tracks
+      this.pruneInactiveTracks(now);
 
       return mappedResults;
     } catch (err) {
