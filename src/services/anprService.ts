@@ -67,23 +67,28 @@ class AnprService {
     video?: HTMLVideoElement,
     rawBbox?: [number, number, number, number]
   ): string {
-    if (!video || !rawBbox || video.readyState < 2) {
+    if (!video || !rawBbox || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
       return 'Steel Metallic Gray';
     }
 
     try {
       const [vx, vy, vw, vh] = rawBbox;
+      const vWidth = video.videoWidth;
+      const vHeight = video.videoHeight;
+
+      // Sample upper central body region of the car (bonnet / roof / door panels)
+      const sx = Math.max(0, Math.min(vWidth - 10, Math.floor(vx + vw * 0.20)));
+      const sy = Math.max(0, Math.min(vHeight - 10, Math.floor(vy + vh * 0.15)));
+      const sw = Math.max(10, Math.min(vWidth - sx, Math.floor(vw * 0.60)));
+      const sh = Math.max(10, Math.min(vHeight - sy, Math.floor(vh * 0.35)));
+
+      if (sw <= 0 || sh <= 0) return 'Steel Metallic Gray';
+
       const sampleCanvas = document.createElement('canvas');
       sampleCanvas.width = 24;
       sampleCanvas.height = 24;
       const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return 'Steel Metallic Gray';
-
-      // Sample upper central body region of the car (bonnet / roof / door panels)
-      const sx = Math.max(0, Math.floor(vx + vw * 0.20));
-      const sy = Math.max(0, Math.floor(vy + vh * 0.15));
-      const sw = Math.max(10, Math.floor(vw * 0.60));
-      const sh = Math.max(10, Math.floor(vh * 0.35));
 
       ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 24, 24);
       const imgData = ctx.getImageData(0, 0, 24, 24);
@@ -169,15 +174,23 @@ class AnprService {
     video: HTMLVideoElement,
     rawBbox: [number, number, number, number]
   ): string {
-    try {
-      const snapCanvas = document.createElement('canvas');
-      const [vx, vy, vw, vh] = rawBbox;
-      
-      const cropX = Math.max(0, Math.floor(vx + vw * 0.12));
-      const cropY = Math.max(0, Math.floor(vy + vh * 0.45));
-      const cropW = Math.max(35, Math.floor(vw * 0.76));
-      const cropH = Math.max(20, Math.floor(vh * 0.45));
+    if (!video || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
+      return '';
+    }
 
+    try {
+      const [vx, vy, vw, vh] = rawBbox;
+      const vWidth = video.videoWidth;
+      const vHeight = video.videoHeight;
+      
+      const cropX = Math.max(0, Math.min(vWidth - 10, Math.floor(vx + vw * 0.12)));
+      const cropY = Math.max(0, Math.min(vHeight - 10, Math.floor(vy + vh * 0.45)));
+      const cropW = Math.max(35, Math.min(vWidth - cropX, Math.floor(vw * 0.76)));
+      const cropH = Math.max(20, Math.min(vHeight - cropY, Math.floor(vh * 0.45)));
+
+      if (cropW <= 0 || cropH <= 0) return '';
+
+      const snapCanvas = document.createElement('canvas');
       snapCanvas.width = 320;
       snapCanvas.height = 100;
       const ctx = snapCanvas.getContext('2d', { willReadFrequently: true });

@@ -62,6 +62,8 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
     minConfidence: 0.35,
   });
 
+  const oldBlobRef = useRef<string | null>(null);
+
   // Handle local video file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,12 +74,11 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
     setSelectedFileName(file.name);
 
     if (videoSrc && videoSrc.startsWith('blob:')) {
-      URL.revokeObjectURL(videoSrc);
+      oldBlobRef.current = videoSrc;
     }
 
     const objectUrl = URL.createObjectURL(file);
     setVideoSrc(objectUrl);
-    setIsLoading(false);
   };
 
   // Handle URL stream connection
@@ -90,7 +91,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
     setSelectedFileName(targetUrl.split('/').pop() || 'Network Stream');
 
     if (videoSrc && videoSrc.startsWith('blob:')) {
-      URL.revokeObjectURL(videoSrc);
+      oldBlobRef.current = videoSrc;
     }
 
     setVideoSrc(targetUrl);
@@ -126,6 +127,15 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   };
 
   const onLoadedMetadata = () => {
+    if (oldBlobRef.current) {
+      try {
+        URL.revokeObjectURL(oldBlobRef.current);
+      } catch {
+        // ignore
+      }
+      oldBlobRef.current = null;
+    }
+
     if (videoRef.current) {
       setDuration(videoRef.current.duration || 0);
       setIsLoading(false);

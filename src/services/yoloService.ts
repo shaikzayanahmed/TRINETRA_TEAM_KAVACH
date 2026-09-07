@@ -134,6 +134,17 @@ export class YoloService {
    * Preprocess video frame into YOLOv8 NCHW Float32 tensor using zero-allocation persistent buffers
    */
   private preprocess(video: HTMLVideoElement): ort.Tensor | null {
+    if (
+      !video ||
+      video.readyState < 2 ||
+      video.videoWidth <= 0 ||
+      video.videoHeight <= 0 ||
+      video.seeking ||
+      video.ended
+    ) {
+      return null;
+    }
+
     if (!this.offscreenCanvas || !this.offscreenCtx) {
       this.offscreenCanvas = document.createElement('canvas');
       this.offscreenCanvas.width = this.inputWidth;
@@ -144,25 +155,29 @@ export class YoloService {
     const ctx = this.offscreenCtx;
     if (!ctx) return null;
 
-    ctx.drawImage(video, 0, 0, this.inputWidth, this.inputHeight);
-    const imgData = ctx.getImageData(0, 0, this.inputWidth, this.inputHeight);
-    const { data } = imgData;
+    try {
+      ctx.drawImage(video, 0, 0, this.inputWidth, this.inputHeight);
+      const imgData = ctx.getImageData(0, 0, this.inputWidth, this.inputHeight);
+      const { data } = imgData;
 
-    const channelSize = this.inputWidth * this.inputHeight;
-    const floatData = this.inputTensorBuffer;
-    const rOffset = 0;
-    const gOffset = channelSize;
-    const bOffset = channelSize * 2;
-    const inv255 = 1.0 / 255.0;
+      const channelSize = this.inputWidth * this.inputHeight;
+      const floatData = this.inputTensorBuffer;
+      const rOffset = 0;
+      const gOffset = channelSize;
+      const bOffset = channelSize * 2;
+      const inv255 = 1.0 / 255.0;
 
-    // Fast single-pass normalization
-    for (let i = 0, p = 0; i < channelSize; i++, p += 4) {
-      floatData[rOffset + i] = data[p] * inv255;
-      floatData[gOffset + i] = data[p + 1] * inv255;
-      floatData[bOffset + i] = data[p + 2] * inv255;
+      // Fast single-pass normalization
+      for (let i = 0, p = 0; i < channelSize; i++, p += 4) {
+        floatData[rOffset + i] = data[p] * inv255;
+        floatData[gOffset + i] = data[p + 1] * inv255;
+        floatData[bOffset + i] = data[p + 2] * inv255;
+      }
+
+      return new ort.Tensor('float32', floatData, [1, 3, this.inputHeight, this.inputWidth]);
+    } catch (err) {
+      return null;
     }
-
-    return new ort.Tensor('float32', floatData, [1, 3, this.inputHeight, this.inputWidth]);
   }
 
   /**
@@ -175,6 +190,8 @@ export class YoloService {
     confThreshold: number = 0.35,
     iouThreshold: number = 0.38
   ): YoloDetection[] {
+    if (!outputTensor || !outputTensor.data) return [];
+
     const data = outputTensor.data as Float32Array;
     const numCandidates = 8400;
     const numClasses = 80;
@@ -293,19 +310,34 @@ export class YoloService {
     video: HTMLVideoElement,
     confThreshold: number = 0.35
   ): Promise<YoloDetection[]> {
-    if (!this.session || video.readyState < 2) return [];
+    if (
+      !this.session ||
+      !video ||
+      video.readyState < 2 ||
+      video.videoWidth <= 0 ||
+      video.videoHeight <= 0 ||
+      video.seeking ||
+      video.ended
+    ) {
+      return [];
+    }
 
-    const tensor = this.preprocess(video);
-    if (!tensor) return [];
+    let inputTensor: ort.Tensor | null = null;
+    let output: Record<string, ort.Tensor> | null = null;
 
     try {
+      inputTensor = this.preprocess(video);
+      if (!inputTensor) return [];
+
       const feeds: Record<string, ort.Tensor> = {};
       const inputName = this.session.inputNames[0] || 'images';
-      feeds[inputName] = tensor;
+      feeds[inputName] = inputTensor;
 
-      const output = await this.session.run(feeds);
+      output = await this.session.run(feeds);
       const outputName = this.session.outputNames[0] || 'output0';
       const outputTensor = output[outputName];
+
+      if (!outputTensor) return [];
 
       const srcWidth = video.videoWidth || 640;
       const srcHeight = video.videoHeight || 480;
@@ -314,6 +346,20 @@ export class YoloService {
     } catch (err) {
       console.warn('YOLO inference error:', err);
       return [];
+    } finally {
+      // Release WebGPU / WebGL / WASM tensors to prevent OOM memory leaks and browser tab crashes
+      try {
+        if (inputTensor) {
+          inputTensor.dispose?.();
+        }
+        if (output) {
+          for (const key in output) {
+            output[key]?.dispose?.();
+          }
+        }
+      } catch {
+        // Ignore dispose cleanup note
+      }
     }
   }
 }
