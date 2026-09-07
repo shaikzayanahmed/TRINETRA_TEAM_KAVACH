@@ -37,7 +37,7 @@ export const Sidebar: React.FC = () => {
       name: 'Alerts & Intercept',
       path: '/alerts',
       icon: 'notifications_active',
-      badge: isFenceBreached || activeAlert ? '1 CRIT' : undefined,
+      badge: isFenceBreached || (activeAlert && activeAlert.status !== 'RESOLVED') ? '1 CRIT' : undefined,
       badgeType: 'error',
       requiredRole: 'OPERATOR',
     },

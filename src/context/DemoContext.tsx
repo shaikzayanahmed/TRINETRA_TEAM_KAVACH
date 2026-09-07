@@ -81,7 +81,7 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isFenceBreached, setIsFenceBreached] = useState<boolean>(false);
   const [isDetectionVisible, setIsDetectionVisible] = useState<boolean>(false);
 
-  // Listen to live vision detections crossing the boundary
+  // Listen to live vision detections crossing the boundary and alert resolutions
   useEffect(() => {
     const handleLiveBreach = (e: any) => {
       if (e.detail?.alert && e.detail?.evidence) {
@@ -91,9 +91,35 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsDetectionVisible(true);
       }
     };
+
+    const handleAlertResolved = (e: any) => {
+      if (e.detail?.hasActiveBreach === false) {
+        setIsFenceBreached(false);
+        setActiveAlert(null);
+        setActiveTarget((prev) => (prev ? { ...prev, status: 'TRACKING' } : null));
+      } else if (e.detail?.id && activeAlert?.id === e.detail.id) {
+        setIsFenceBreached(false);
+        setActiveAlert(null);
+        setActiveTarget((prev) => (prev ? { ...prev, status: 'TRACKING' } : null));
+      }
+    };
+
+    const handleBreachCleared = () => {
+      setIsFenceBreached(false);
+      setActiveAlert(null);
+      setActiveTarget((prev) => (prev ? { ...prev, status: 'TRACKING' } : null));
+    };
+
     window.addEventListener('trinetra_live_breach', handleLiveBreach);
-    return () => window.removeEventListener('trinetra_live_breach', handleLiveBreach);
-  }, []);
+    window.addEventListener('trinetra_alert_resolved', handleAlertResolved);
+    window.addEventListener('trinetra_breach_cleared', handleBreachCleared);
+
+    return () => {
+      window.removeEventListener('trinetra_live_breach', handleLiveBreach);
+      window.removeEventListener('trinetra_alert_resolved', handleAlertResolved);
+      window.removeEventListener('trinetra_breach_cleared', handleBreachCleared);
+    };
+  }, [activeAlert]);
 
   // Apply step changes
   useEffect(() => {

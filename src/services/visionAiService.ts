@@ -156,6 +156,7 @@ class VisionAiService {
       zoneName,
       confidence: score || 98.4,
       snapshotBase64,
+      videoElement,
     });
 
     try {

@@ -84,6 +84,24 @@ export type AlertSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type AlertStatus = 'NEW' | 'ACKNOWLEDGED' | 'RESOLVED';
 export type AlertType = 'VIRTUAL_FENCE_BREACH' | 'LOITERING' | 'ANOMALOUS_MOTION' | 'SENSOR_TAMPER';
 
+export interface AlertTimelineEvent {
+  id: string;
+  timestamp: string;
+  timeMs?: number;
+  action: 'INITIAL_BREACH' | 'RE_BREACH' | 'ZONE_TRANSIT' | 'LOITERING' | 'EVIDENCE_RECORDED' | 'TARGET_TRACKED';
+  details: string;
+  confidence: number;
+  zone: string;
+  fenceId?: string;
+  fenceName?: string;
+  fenceType?: FenceGeometryType;
+  fencePoints?: VirtualFencePoint[];
+  evidenceId?: string;
+  videoClipUrl?: string;
+  snapshotUrl?: string;
+  coordinates?: { lat: number; lng: number };
+}
+
 export interface Alert {
   id: string;
   title: string;
@@ -97,10 +115,22 @@ export interface Alert {
   cameraId: string;
   zone: string;
   sector: string;
+  fenceId?: string;
+  fenceName?: string;
+  fenceType?: FenceGeometryType;
+  fencePreset?: string;
+  fencePoints?: VirtualFencePoint[];
   timestamp: string;
+  lastBreachTimestamp?: string;
+  breachCount?: number;
+  timeline?: AlertTimelineEvent[];
+  timelineTag?: string;
   resolvedAt?: string;
   resolvedBy?: string;
   evidenceId: string;
+  videoClipUrl?: string;
+  videoDurationSeconds?: number;
+  databaseStored?: boolean;
   sha256Hash: string;
 }
 
@@ -167,6 +197,10 @@ export interface Evidence {
   fileSizeKb: number;
   durationSeconds?: number;
   thumbnailUrl?: string;
+  videoClipUrl?: string;
+  videoBufferBase64?: string;
+  timeline?: AlertTimelineEvent[];
+  databaseStored?: boolean;
   plateCropUrl?: string;
   plateNumber?: string;
   vehicleColor?: string;

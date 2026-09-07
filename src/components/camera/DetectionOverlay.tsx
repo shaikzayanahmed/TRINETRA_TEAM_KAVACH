@@ -36,6 +36,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   const isMoving = liveDetection?.isMoving ?? (target?.speedKmh ? target.speedKmh > 5 : true);
   const speedKmh = liveDetection?.speedKmh || target?.speedKmh || (anpr?.speedKmh ?? 48);
   const bearingLabel = liveDetection?.bearingLabel || target?.bearing || anpr?.bearing || 'EASTBOUND';
+  const vehicleColor = anpr?.vehicleColor || 'Dark Obsidian';
 
   const isFlagged = Boolean(anpr?.isFlagged);
 
@@ -47,20 +48,26 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     ? 'border-tertiary shadow-[0_0_10px_rgba(255,183,125,0.4)]'
     : 'border-primary shadow-[0_0_12px_rgba(173,198,255,0.6)]';
 
-  const badgeColor = breachState || isFlagged
-    ? 'bg-error-container text-error border-error/90'
+  const badgeBg = breachState || isFlagged
+    ? 'bg-error-container/95 text-error border-error/90'
     : isVehicle
     ? 'bg-surface-container-lowest/95 text-secondary border-secondary/80'
     : isThermal
     ? 'bg-surface-container-lowest/95 text-tertiary border-tertiary/80'
     : 'bg-surface-container-lowest/95 text-primary border-primary/80';
 
-  const isAnalyzed = Boolean(
-    anpr?.isAnalyzed &&
-    anpr?.plateNumber &&
-    anpr.plateNumber !== 'ANALYZING...' &&
-    anpr.plateNumber !== 'ACQUIRING...'
-  );
+  const getColorDot = (colorName: string) => {
+    switch (colorName) {
+      case 'Silver White': return 'bg-slate-200 border-slate-400';
+      case 'Dark Obsidian': return 'bg-zinc-900 border-zinc-500';
+      case 'Tactical Olive Green': return 'bg-emerald-600 border-emerald-400';
+      case 'Crimson Red': return 'bg-rose-500 border-rose-300';
+      case 'Navy Blue': return 'bg-blue-500 border-blue-300';
+      case 'Steel Metallic Gray': return 'bg-slate-400 border-slate-300';
+      case 'Desert Sand': return 'bg-amber-400 border-amber-200';
+      default: return 'bg-secondary border-secondary';
+    }
+  };
 
   return (
     <div
@@ -73,207 +80,63 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
       className={`absolute border-2 rounded pointer-events-none will-change-[left,top,width,height] transition-all duration-75 ease-out ${borderColor}`}
     >
       {/* ========================================================================= */}
-      {/* CROPPED NUMBER PLATE & TACTICAL ANPR CARD DISPLAYED DIRECTLY ABOVE THE CAR */}
-      {/* ONLY DISPLAYED FOR MOVING CARS WITH LIVE ANALYSIS */}
+      {/* CLEAN VEHICLE IDENTIFICATION & COLOR LAYER (NO NUMBER PLATE CLUTTER IN VIDEO) */}
       {/* ========================================================================= */}
-      {isVehicle && isMoving && isAnalyzed && anpr ? (
-        <div className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 z-30 flex flex-col items-center select-none pointer-events-auto">
-          {/* Main Tactical ANPR Floating Card */}
-          <div className={`backdrop-blur-md border rounded-md p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.95)] flex flex-col gap-1 min-w-[210px] max-w-[260px] text-on-surface ${
-            isFlagged
-              ? 'bg-error-container/95 border-error text-error'
-              : 'bg-surface-container-lowest/95 border-secondary/70'
-          }`}>
-            {/* Top Bar: Target ID & Motion Status & Vehicle Color */}
-            <div className="flex items-center justify-between gap-1 text-[9px] font-mono border-b border-surface-container-high/80 pb-0.5">
-              <div className="flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${isFlagged ? 'bg-error animate-ping' : 'bg-secondary animate-pulse'}`} />
-                <span className="font-bold text-secondary">{targetId}</span>
-                <span className="text-outline">·</span>
-                <span className="text-on-surface/80 uppercase">{classification}</span>
-                {anpr.vehicleColor && (
-                  <span className="text-outline text-[8px]">({anpr.vehicleColor})</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <span className={`px-1 py-0.2 rounded font-bold text-[8px] ${
-                  isFlagged
-                    ? 'bg-error text-on-error animate-pulse'
-                    : 'bg-secondary/20 text-secondary border border-secondary/40'
-                }`}>
-                  {anpr.securityClearance}
-                </span>
-              </div>
+      {isVehicle ? (
+        <div className="absolute bottom-[calc(100%+4px)] left-0 z-20 flex flex-col gap-0.5 select-none pointer-events-none">
+          <div className={`backdrop-blur-md border rounded px-2 py-0.5 shadow-[0_2px_10px_rgba(0,0,0,0.85)] flex items-center gap-1.5 font-mono text-[10px] ${badgeBg}`}>
+            <span className="font-bold">{targetId}</span>
+            <span className="text-outline">·</span>
+            <span className="font-semibold uppercase tracking-wider">{classification}</span>
+            <span className="text-outline">·</span>
+            {/* Real-Time Vehicle Paint Color Identification */}
+            <div className="flex items-center gap-1 bg-surface-container-high/80 px-1.5 py-0.2 rounded border border-surface-container-highest">
+              <span className={`w-2 h-2 rounded-full border ${getColorDot(vehicleColor)}`} />
+              <span className="font-bold text-[9px] text-on-surface uppercase">{vehicleColor}</span>
             </div>
-
-            {/* REAL OPTICAL NUMBER PLATE CROP TAKEN DIRECTLY FROM VIDEO PIXELS */}
-            {anpr.plateCropUrl && (
-              <div className="relative rounded overflow-hidden border border-secondary/50 bg-black shadow-inner flex flex-col">
-                <div className="w-full flex items-center justify-between px-1.5 py-0.5 bg-surface-container-high/90 text-[7px] font-mono text-outline border-b border-surface-container-highest">
-                  <span className="flex items-center gap-1 text-secondary font-bold">
-                    <span className="w-1 h-1 rounded-full bg-secondary animate-pulse" />
-                    LIVE OPTICAL CROP
-                  </span>
-                  <span className="text-primary font-bold">RAW SENSOR FRAME</span>
-                </div>
-                <div className="relative w-full h-11 bg-black flex items-center justify-center overflow-hidden">
-                  <img
-                    src={anpr.plateCropUrl}
-                    alt="Vehicle Number Plate Optical Crop"
-                    className="w-full h-full object-cover filter contrast-125 brightness-105"
-                  />
-                  {/* Optical Reticle Crosshairs Over Crop */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 border-t border-l border-secondary" />
-                    <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 border-t border-r border-secondary" />
-                    <div className="absolute bottom-0.5 left-0.5 w-1.5 h-1.5 border-b border-l border-secondary" />
-                    <div className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 border-b border-r border-secondary" />
-                    <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-secondary/30" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* OCR Extracted Plate Number & Confidence */}
-            <div className="px-2 py-0.5 bg-surface-container-lowest/90 rounded border border-secondary/50 flex items-center justify-between gap-1.5 shadow-tactical-inset">
-              <div className="flex items-center gap-1">
-                <span className="px-1 py-0.2 rounded bg-blue-700 text-white font-mono text-[7px] font-bold">
-                  IND
-                </span>
-                <span className="font-mono text-[11px] font-extrabold tracking-wider text-primary">
-                  {anpr.plateNumber}
-                </span>
-              </div>
-              <span className="px-1.5 py-0.2 rounded bg-secondary/20 text-secondary text-[8px] font-bold font-mono border border-secondary/40">
-                {anpr.confidence}% OCR
-              </span>
+            {/* Background ANPR Status Tag */}
+            <div className="flex items-center gap-1 text-[8px] text-secondary font-bold pl-1 border-l border-surface-container-high">
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+              <span>ANPR RECORDED</span>
             </div>
-
-            {/* MinIO Storage & Evidence Cryptographic Seal */}
-            <div className="flex items-center justify-between text-[7px] font-mono text-outline px-0.5">
-              <div className="flex items-center gap-1 text-primary">
-                <span className="material-symbols-outlined text-[9px]">cloud_done</span>
-                <span className="font-bold">MinIO: {anpr.minioStorage?.bucket || 'trinetra-evidence'}/{targetId}</span>
-              </div>
-              <span className="px-1 py-0.2 rounded bg-primary/10 text-primary border border-primary/30 font-bold">
-                {anpr.minioStorage?.status || 'SEALED'}
-              </span>
-            </div>
-
-            {/* Bottom Telemetry: Moving Speed & Heading Vector */}
-            <div className="flex items-center justify-between text-[8px] font-mono text-outline pt-0.5 border-t border-surface-container-high/60">
-              <div className="flex items-center gap-1 font-bold text-secondary">
-                <span className="material-symbols-outlined text-[10px]">speed</span>
-                <span>{speedKmh} KM/H</span>
-                <span className="text-outline font-normal">| {bearingLabel}</span>
-              </div>
-              <div className="text-outline">
-                {anpr.stateCode} SECTOR
-              </div>
-            </div>
-          </div>
-
-          {/* Optical Connecting Anchor Line pointing down to top of car */}
-          <div className="flex flex-col items-center">
-            <div className="w-[1.5px] h-2 bg-secondary/80 shadow-[0_0_4px_rgba(149,212,176,0.8)]" />
-            <div className="w-1.5 h-1.5 rotate-45 -mt-0.5 bg-secondary shadow-[0_0_4px_rgba(149,212,176,0.8)]" />
           </div>
         </div>
       ) : (
-        /* Lightweight classification header for non-moving / stationary cars or humans */
-        <div
-          className={`absolute -top-7 left-0 px-2 py-0.5 rounded border font-mono text-[10px] sm:text-[11px] font-bold whitespace-nowrap shadow-[2px_2px_6px_rgba(0,0,0,0.8)] flex items-center gap-1.5 ${badgeColor}`}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${breachState ? 'bg-error animate-ping' : 'bg-current animate-pulse'}`} />
-          <span>{targetId} | {classification} {isVehicle && isMoving ? '· MOVING' : `| ${confidence}%`}</span>
+        /* Human / Target Header Label */
+        <div className="absolute bottom-[calc(100%+4px)] left-0 z-20 flex flex-col gap-0.5 select-none pointer-events-none">
+          <div className={`backdrop-blur-md border rounded px-2 py-0.5 shadow-tactical-inset flex items-center gap-1.5 font-mono text-[10px] ${badgeBg}`}>
+            <span className="font-bold">{targetId}</span>
+            <span className="text-outline">·</span>
+            <span className="font-semibold">{classification}</span>
+            <span className="text-outline">·</span>
+            <span className="font-semibold">{Math.round(confidence)}%</span>
+            {breachState && (
+              <span className="ml-1 px-1 py-0.2 rounded bg-error text-on-error font-bold text-[8px] animate-pulse">
+                BREACH
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Reticle Corner Marks on Bounding Box */}
-      <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-current" />
-      <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-current" />
-      <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-current" />
-      <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-current" />
-
-      {/* Center Target Lock Crosshair */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none flex items-center justify-center opacity-80">
-        <div className="w-full h-[1px] bg-current" />
-        <div className="h-full w-[1px] bg-current absolute" />
+      {/* Target Bottom Telemetry (Speed & Direction) */}
+      <div className="absolute top-[calc(100%+3px)] left-0 z-20 flex items-center gap-1.5 font-mono text-[9px] text-outline bg-surface-container-lowest/90 px-1.5 py-0.2 rounded border border-surface-container-high backdrop-blur-sm">
+        <span className="text-on-surface font-semibold">{isMoving ? `${Math.round(speedKmh)} km/h` : 'STATIONARY'}</span>
+        <span>·</span>
+        <span className="text-primary font-bold">{bearingLabel}</span>
       </div>
 
-      {/* ========================================================================= */}
-      {/* DIRECT VEHICLE NUMBER PLATE TARGETING RETICLE ON FRONT/REAR BUMPER FASCIA */}
-      {/* ========================================================================= */}
-      {isVehicle && anpr && (
-        <div
-          style={{
-            left: `${anpr.plateBbox?.x ?? 20}%`,
-            top: `${anpr.plateBbox?.y ?? 66}%`,
-            width: `${anpr.plateBbox?.width ?? 60}%`,
-            height: `${anpr.plateBbox?.height ?? 24}%`,
-          }}
-          className={`absolute rounded pointer-events-none transition-all duration-75 flex flex-col justify-center items-center border ${
-            isFlagged
-              ? 'border-error bg-error-container/85 shadow-[0_0_10px_rgba(255,180,171,0.8)]'
-              : 'border-secondary/90 bg-surface-container-lowest/90 shadow-[0_0_10px_rgba(149,212,176,0.6)] ring-1 ring-secondary/40'
-          }`}
-        >
-          {/* Pulsating Corner Reticles for Number Plate Lock */}
-          <div className="absolute -top-0.5 -left-0.5 w-1.5 h-1.5 border-t-2 border-l-2 border-current" />
-          <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 border-t-2 border-r-2 border-current" />
-          <div className="absolute -bottom-0.5 -left-0.5 w-1.5 h-1.5 border-b-2 border-l-2 border-current" />
-          <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 border-b-2 border-r-2 border-current" />
+      {/* Corner Reticle Accents */}
+      <div className="absolute -top-1 -left-1 w-2.5 h-2.5 border-t-2 border-l-2 border-current pointer-events-none" />
+      <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t-2 border-r-2 border-current pointer-events-none" />
+      <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 border-b-2 border-l-2 border-current pointer-events-none" />
+      <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 border-b-2 border-r-2 border-current pointer-events-none" />
 
-          {/* Micro HUD Plate Lock Header */}
-          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-1 py-0.2 rounded bg-surface-container-lowest/95 border border-secondary/60 text-[7px] font-mono font-extrabold text-secondary tracking-tighter uppercase whitespace-nowrap flex items-center gap-0.5 shadow-sm">
-            <span className="w-1 h-1 rounded-full bg-secondary animate-ping" />
-            <span>ANPR LOCK</span>
-            <span className="text-outline">·</span>
-            <span>{anpr.confidence}%</span>
-          </div>
-
-          {/* High-Security Registration Plate (HSRP) Visual */}
-          <div className="w-full h-full flex items-center justify-between px-1 py-0.5 gap-1 bg-gradient-to-r from-surface-container-lowest via-surface-container-low to-surface-container-lowest">
-            {/* IND Blue Security Band */}
-            <div className="h-full px-0.5 bg-blue-700 text-white rounded-l-[1px] flex flex-col items-center justify-center text-[5px] font-extrabold leading-tight">
-              <span>🇮🇳</span>
-              <span className="tracking-tighter">IND</span>
-            </div>
-
-            {/* Embossed Indian License Plate Number */}
-            <div className="flex-1 text-center font-mono text-[9px] sm:text-[10px] font-black tracking-wider text-on-surface truncate drop-shadow-sm">
-              {anpr.plateNumber}
-            </div>
-
-            {/* Optical Sensor Lock Dot */}
-            <div className="flex flex-col items-end pr-0.5">
-              <span className={`w-1 h-1 rounded-full ${isFlagged ? 'bg-error animate-ping' : 'bg-secondary animate-pulse'}`} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Moving Velocity Direction Arrow (Inside Vehicle Box) */}
-      {isVehicle && isMoving && (
-        <div className="absolute top-1 right-1 px-1 py-0.2 rounded bg-surface-container-lowest/80 border border-secondary/40 text-[8px] font-mono text-secondary font-bold flex items-center gap-0.5">
-          <span className="material-symbols-outlined text-[10px] animate-pulse">navigation</span>
-          <span>{speedKmh} KM/H</span>
-        </div>
-      )}
-
-      {/* Bottom Coordinates & Breach Tag */}
-      <div className="absolute -bottom-6 right-0 px-2 py-0.5 bg-surface-container-lowest/90 border border-surface-container-high rounded text-outline font-mono text-[9px] sm:text-[10px] whitespace-nowrap shadow-[2px_2px_6px_rgba(0,0,0,0.8)]">
-        {isThermal ? (
-          <span className="text-tertiary">HEAT: {target?.heatSignatureApparent || '36.4°C APPARENT'}</span>
-        ) : (
-          <span>
-            {breachState ? (
-              <strong className="text-error">TRIPWIRE BREACH</strong>
-            ) : (
-              `COORD: ${(34.2911 + (bbox.x - 50) * 0.0002).toFixed(4)}, ${(77.7533 + (bbox.y - 50) * 0.0002).toFixed(4)}`
-            )}
-          </span>
-        )}
+      {/* Target Center Optical Reticle */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
+        <div className="w-3 h-3 border border-current rounded-full" />
+        <div className="absolute w-5 h-[1px] bg-current" />
+        <div className="absolute h-5 w-[1px] bg-current" />
       </div>
     </div>
   );
