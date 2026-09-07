@@ -205,21 +205,86 @@ export const MOCK_ALERTS: Alert[] = [
   },
 ];
 
-export const MOCK_VIRTUAL_FENCE: VirtualFence = {
-  id: 'VF-ALPHA-01',
-  name: 'Zone Alpha',
-  status: 'ACTIVE',
-  sector: 'Northern Border Sector 07',
-  confidenceThreshold: 85.0,
-  assignedCameras: ['CAM-RGB-01', 'CAM-LWIR-01'],
-  points: [
-    { x: 20, y: 70, lat: 34.288, lng: 77.748 },
-    { x: 45, y: 55, lat: 34.291, lng: 77.753 },
-    { x: 80, y: 35, lat: 34.296, lng: 77.762 },
-  ],
-  breachCount: 1,
-  lastBreachTimestamp: '14:32:18',
-};
+export const MOCK_VIRTUAL_FENCES: VirtualFence[] = [
+  {
+    id: 'VF-01',
+    name: 'Sector 07 Zone Alpha (Center Geofence)',
+    type: 'POLYGON',
+    sourceTarget: 'CAM-RGB-01',
+    status: 'ACTIVE',
+    sector: 'Northern Border Sector 07',
+    confidenceThreshold: 85.0,
+    assignedCameras: ['CAM-RGB-01', 'CAM-LWIR-01'],
+    direction: 'ENTRY_ONLY',
+    postgisWkt: 'SRID=4326;POLYGON((77.7501 34.2941, 77.7565 34.2938, 77.7571 34.2892, 77.7505 34.2895, 77.7501 34.2941))',
+    points: [
+      { x: 30, y: 30, lat: 34.2941, lng: 77.7501, label: 'NODE 1' },
+      { x: 70, y: 30, lat: 34.2938, lng: 77.7565, label: 'NODE 2' },
+      { x: 70, y: 70, lat: 34.2892, lng: 77.7571, label: 'NODE 3' },
+      { x: 30, y: 70, lat: 34.2895, lng: 77.7505, label: 'NODE 4' },
+    ],
+    breachCount: 1,
+    lastBreachTimestamp: '14:32:18',
+  },
+  {
+    id: 'VF-02',
+    name: 'Northern Ridge Laser Tripwire',
+    type: 'TRIPWIRE',
+    sourceTarget: 'CAM-RGB-01',
+    status: 'ACTIVE',
+    sector: 'Northern Border Sector 07',
+    confidenceThreshold: 90.0,
+    assignedCameras: ['CAM-RGB-01'],
+    direction: 'BIDIRECTIONAL',
+    postgisWkt: 'SRID=4326;LINESTRING(77.7480 34.2950, 77.7600 34.2880)',
+    points: [
+      { x: 15, y: 75, lat: 34.295, lng: 77.748, label: 'LASER POST A' },
+      { x: 85, y: 25, lat: 34.288, lng: 77.76, label: 'LASER POST B' },
+    ],
+    breachCount: 0,
+  },
+  {
+    id: 'VF-03',
+    name: 'Command Post 3D Volumetric Dome',
+    type: '3D_SURROUNDING',
+    sourceTarget: 'CAM-LWIR-01',
+    status: 'ACTIVE',
+    sector: 'Northern Border Sector 07',
+    confidenceThreshold: 88.0,
+    assignedCameras: ['CAM-LWIR-01'],
+    heightMeters: 5.5,
+    postgisWkt: 'SRID=4326;POLYHEDRALSURFACE Z (((77.7500 34.2930 0, 77.7560 34.2930 0, 77.7560 34.2890 0, 77.7500 34.2890 0, 77.7500 34.2930 0)))',
+    points: [
+      { x: 25, y: 35, lat: 34.293, lng: 77.75, label: 'PILLAR 1' },
+      { x: 75, y: 35, lat: 34.293, lng: 77.756, label: 'PILLAR 2' },
+      { x: 75, y: 75, lat: 34.289, lng: 77.756, label: 'PILLAR 3' },
+      { x: 25, y: 75, lat: 34.289, lng: 77.75, label: 'PILLAR 4' },
+    ],
+    breachCount: 2,
+    lastBreachTimestamp: '10:14:02',
+  },
+  {
+    id: 'VF-04',
+    name: 'Highway ANPR Chokepoint & Trap',
+    type: 'POLYGON',
+    sourceTarget: 'CAM-LWIR-01',
+    status: 'ACTIVE',
+    sector: 'Highway NH-1A Corridor',
+    confidenceThreshold: 92.0,
+    assignedCameras: ['CAM-LWIR-01'],
+    direction: 'ENTRY_ONLY',
+    postgisWkt: 'SRID=4326;POLYGON((77.7510 34.2960, 77.7590 34.2960, 77.7580 34.2870, 77.7500 34.2870, 77.7510 34.2960))',
+    points: [
+      { x: 20, y: 20, lat: 34.296, lng: 77.751, label: 'CHECKPOINT NW' },
+      { x: 80, y: 20, lat: 34.296, lng: 77.759, label: 'CHECKPOINT NE' },
+      { x: 75, y: 80, lat: 34.287, lng: 77.758, label: 'CHECKPOINT SE' },
+      { x: 25, y: 80, lat: 34.287, lng: 77.75, label: 'CHECKPOINT SW' },
+    ],
+    breachCount: 0,
+  },
+];
+
+export const MOCK_VIRTUAL_FENCE: VirtualFence = MOCK_VIRTUAL_FENCES[0];
 
 export const MOCK_EDGE_NODE: EdgeNode = {
   id: 'EDGE-01',

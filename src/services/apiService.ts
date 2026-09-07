@@ -12,7 +12,7 @@ import {
   MOCK_CAMERAS,
   MOCK_TARGETS,
   MOCK_ALERTS,
-  MOCK_VIRTUAL_FENCE,
+  MOCK_VIRTUAL_FENCES,
   MOCK_EDGE_NODE,
   MOCK_EVIDENCES,
   MOCK_ENVIRONMENT,
@@ -29,10 +29,21 @@ class ApiService {
   private targets: Target[] = [...MOCK_TARGETS];
   private alerts: Alert[] = this.loadStoredAlerts();
   private fences: VirtualFence[] = this.loadStoredFences();
+  private activeFenceId: string = this.loadActiveFenceId();
   private edgeNodes: EdgeNode[] = [{ ...MOCK_EDGE_NODE }];
   private evidence: Evidence[] = this.loadStoredEvidence();
   private environment: EnvironmentStatus = { ...MOCK_ENVIRONMENT };
   private auditEvents: AuditEvent[] = [...MOCK_AUDIT_EVENTS];
+
+  private loadActiveFenceId(): string {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('trinetra_active_fence_id');
+        if (stored) return stored;
+      }
+    } catch (e) {}
+    return this.fences[0]?.id || 'VF-01';
+  }
 
   private loadStoredFences(): VirtualFence[] {
     try {
@@ -48,17 +59,34 @@ class ApiService {
     } catch (e) {
       console.warn('Failed to load stored fences:', e);
     }
-    return [{ ...MOCK_VIRTUAL_FENCE }];
+    return [...MOCK_VIRTUAL_FENCES];
+  }
+
+  private broadcastFenceUpdate() {
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('trinetra_fence_updated', {
+            detail: {
+              activeFence: this.getActiveFenceSync(),
+              allFences: this.fences,
+            },
+          })
+        );
+      }
+    } catch (e) {}
   }
 
   private saveStoredFences() {
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem('trinetra_virtual_fences', JSON.stringify(this.fences));
+        localStorage.setItem('trinetra_active_fence_id', this.activeFenceId);
       }
     } catch (e) {
       console.warn('Failed to save fences to localStorage:', e);
     }
+    this.broadcastFenceUpdate();
   }
 
 
@@ -338,6 +366,27 @@ class ApiService {
   }
 
   // Virtual Fence APIs
+  getActiveFenceSync(): VirtualFence {
+    const found = this.fences.find((f) => f.id === this.activeFenceId);
+    return found || this.fences[0] || MOCK_VIRTUAL_FENCES[0];
+  }
+
+  async getActiveFence(): Promise<VirtualFence> {
+    await delay(20);
+    return this.getActiveFenceSync();
+  }
+
+  async setActiveFence(id: string): Promise<VirtualFence | undefined> {
+    const target = this.fences.find((f) => f.id === id);
+    if (target) {
+      this.activeFenceId = id;
+      // Mark target as active and others if single active preferred
+      this.saveStoredFences();
+      return target;
+    }
+    return undefined;
+  }
+
   async getVirtualFences(): Promise<VirtualFence[]> {
     try {
       const res = await fetch(`${BACKEND_BASE_URL}/zones`, { signal: AbortSignal.timeout(1500) });
@@ -347,6 +396,7 @@ class ApiService {
           return backendZones.map((bz: any): VirtualFence => ({
             id: bz.id,
             name: bz.name || 'Zone Alpha Perimeter Tripwire',
+            type: bz.zone_type || 'POLYGON',
             status: bz.enabled ? 'ACTIVE' : 'INACTIVE',
             sector: 'Sector 07 (Northern)',
             confidenceThreshold: 85.0,
@@ -371,7 +421,6 @@ class ApiService {
     await delay(50);
     return [...this.fences];
   }
-
 
   async toggleVirtualFence(id: string, status: 'ACTIVE' | 'INACTIVE'): Promise<VirtualFence | undefined> {
     try {
@@ -398,6 +447,7 @@ class ApiService {
     } else {
       this.fences.unshift({ ...fenceData });
     }
+    this.activeFenceId = fenceData.id;
     this.saveStoredFences();
 
     // Sync to PostgreSQL / PostGIS backend REST API
@@ -419,6 +469,30 @@ class ApiService {
     }
 
     return fenceData;
+  }
+
+  async deleteVirtualFence(id: string): Promise<boolean> {
+    const idx = this.fences.findIndex((f) => f.id === id);
+    if (idx >= 0) {
+      this.fences.splice(idx, 1);
+      if (this.fences.length === 0) {
+        this.fences = [...MOCK_VIRTUAL_FENCES];
+      }
+      if (this.activeFenceId === id) {
+        this.activeFenceId = this.fences[0].id;
+      }
+      this.saveStoredFences();
+
+      try {
+        await fetch(`${BACKEND_BASE_URL}/zones/${id}`, {
+          method: 'DELETE',
+          signal: AbortSignal.timeout(1500),
+        });
+      } catch (e) {}
+
+      return true;
+    }
+    return false;
   }
 
   // Edge Node APIs

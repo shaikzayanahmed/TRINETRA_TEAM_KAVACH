@@ -27,6 +27,11 @@ const DEFAULT_POINTS: Record<FenceGeometryType, VirtualFencePoint[]> = {
 };
 
 export const VirtualFencePage: React.FC = () => {
+  const [storedFences, setStoredFences] = useState<VirtualFence[]>([]);
+  const [currentEditingFenceId, setCurrentEditingFenceId] = useState<string>('VF-01');
+  const [activeFenceId, setActiveFenceId] = useState<string>('VF-01');
+  const [showStoredDrawer, setShowStoredDrawer] = useState<boolean>(false);
+
   const [sourceTarget, setSourceTarget] = useState<FenceSourceTarget>('CAM-RGB-01');
   const [fenceType, setFenceType] = useState<FenceGeometryType>('POLYGON');
   const [points, setPoints] = useState<VirtualFencePoint[]>(DEFAULT_POINTS.POLYGON);
@@ -44,26 +49,43 @@ export const VirtualFencePage: React.FC = () => {
   const { isFenceBreached, triggerBreach, resetDemo } = useDemo();
   const { user, isOperator, isAdmin } = useAuth();
 
-  // Load existing fence configuration on mount
+  // Load existing fence configurations on mount
+  const refreshStoredFences = async () => {
+    const data = await apiService.getVirtualFences();
+    setStoredFences(data);
+    const active = apiService.getActiveFenceSync();
+    if (active) {
+      setActiveFenceId(active.id);
+    }
+    return data;
+  };
+
   useEffect(() => {
-    const fetchFences = async () => {
-      const data = await apiService.getVirtualFences();
-      if (data.length > 0) {
-        const primary = data[0];
-        setZoneName(primary.name || 'Sector 07 Zone Alpha');
-        setIsActive(primary.status === 'ACTIVE');
-        setThreshold(primary.confidenceThreshold || 85.0);
-        if (primary.type) setFenceType(primary.type);
-        if (primary.sourceTarget) setSourceTarget(primary.sourceTarget);
-        if (primary.heightMeters) setHeightMeters(primary.heightMeters);
-        if (primary.direction) setDirection(primary.direction);
-        if (primary.points && primary.points.length >= 2) {
-          setPoints(primary.points);
-        }
+    const init = async () => {
+      const fences = await refreshStoredFences();
+      if (fences.length > 0) {
+        const primary = fences[0];
+        loadFenceIntoStudio(primary);
       }
     };
-    fetchFences();
+    init();
   }, []);
+
+  const loadFenceIntoStudio = (fence: VirtualFence) => {
+    setCurrentEditingFenceId(fence.id);
+    setZoneName(fence.name || 'Sector 07 Zone Alpha');
+    setIsActive(fence.status === 'ACTIVE');
+    setThreshold(fence.confidenceThreshold || 85.0);
+    if (fence.type) setFenceType(fence.type);
+    if (fence.sourceTarget) setSourceTarget(fence.sourceTarget);
+    if (fence.heightMeters) setHeightMeters(fence.heightMeters);
+    if (fence.direction) setDirection(fence.direction);
+    if (fence.points && fence.points.length >= 2) {
+      setPoints(fence.points);
+    }
+    setIsSavedToDb(true);
+    setSelectedPointIndex(null);
+  };
 
   // Handle vertex drag interactions
   const handleMouseMove = useCallback(
@@ -161,12 +183,12 @@ export const VirtualFencePage: React.FC = () => {
     } else if (presetKey === 'DIAGONAL_TRIPWIRE') {
       setFenceType('TRIPWIRE');
       setPoints([
-        { x: 10, y: 80, lat: 34.2881, lng: 77.7475, label: 'PT 1 (START)' },
-        { x: 90, y: 20, lat: 34.2955, lng: 77.7595, label: 'PT 2 (END)' },
+        { x: 15, y: 80, lat: 34.2885, lng: 77.7482, label: 'LASER POST A' },
+        { x: 85, y: 20, lat: 34.2965, lng: 77.7618, label: 'LASER POST B' },
       ]);
     } else if (presetKey === 'BUNKER_3D') {
       setFenceType('3D_SURROUNDING');
-      setHeightMeters(6.0);
+      setHeightMeters(5.0);
       setPoints(DEFAULT_POINTS['3D_SURROUNDING']);
     } else if (presetKey === 'FULL_PERIMETER') {
       setFenceType('POLYGON');
@@ -179,18 +201,20 @@ export const VirtualFencePage: React.FC = () => {
     }
   };
 
-  const handleSaveToPostgis = async () => {
+  const handleSaveToPostgis = async (asNew: boolean = false) => {
     // Generate PostGIS WKT representation
     let wkt = '';
     if (fenceType === 'TRIPWIRE') {
-      wkt = `LINESTRING(${points.map((p) => `${p.lng || 77.7533} ${p.lat || 34.2911}`).join(', ')})`;
+      wkt = `SRID=4326;LINESTRING(${points.map((p) => `${p.lng || 77.7533} ${p.lat || 34.2911}`).join(', ')})`;
     } else {
       const closedPoints = [...points, points[0]];
-      wkt = `POLYGON((${closedPoints.map((p) => `${p.lng || 77.7533} ${p.lat || 34.2911}`).join(', ')}))`;
+      wkt = `SRID=4326;POLYGON((${closedPoints.map((p) => `${p.lng || 77.7533} ${p.lat || 34.2911}`).join(', ')}))`;
     }
 
+    const fenceId = asNew ? `VF-0${storedFences.length + 1}` : currentEditingFenceId;
+
     const fencePayload: VirtualFence = {
-      id: 'VF-01',
+      id: fenceId,
       name: zoneName,
       type: fenceType,
       sourceTarget,
@@ -207,15 +231,49 @@ export const VirtualFencePage: React.FC = () => {
     };
 
     await apiService.saveVirtualFence(fencePayload);
+    setCurrentEditingFenceId(fenceId);
     setIsSavedToDb(true);
-    setSaveNotice(`✅ Virtual Fence geometry (${fenceType}) successfully committed to PostgreSQL / PostGIS [trinetra_db]`);
-    setTimeout(() => setSaveNotice(null), 4500);
+    await refreshStoredFences();
+
+    setSaveNotice(
+      `✅ Virtual Fence [${fenceId}: ${zoneName}] successfully committed to PostgreSQL / PostGIS (trinetra_db) and deployed to live feeds.`
+    );
+    setTimeout(() => setSaveNotice(null), 5000);
+  };
+
+  const handleActivateFence = async (fenceId: string) => {
+    await apiService.setActiveFence(fenceId);
+    setActiveFenceId(fenceId);
+    await refreshStoredFences();
+    const activated = storedFences.find((f) => f.id === fenceId);
+    if (activated) {
+      loadFenceIntoStudio(activated);
+      setSaveNotice(`🚀 [${activated.name}] is now ACTIVE across all Live Surveillance & Camera/Media feeds.`);
+      setTimeout(() => setSaveNotice(null), 4500);
+    }
+  };
+
+  const handleDeleteFence = async (fenceId: string) => {
+    if (storedFences.length <= 1) {
+      alert('Cannot delete the last remaining virtual fence configuration.');
+      return;
+    }
+    if (confirm(`Are you sure you want to delete stored configuration [${fenceId}] from PostgreSQL/PostGIS database?`)) {
+      await apiService.deleteVirtualFence(fenceId);
+      const updated = await refreshStoredFences();
+      if (updated.length > 0) {
+        loadFenceIntoStudio(updated[0]);
+      }
+      setSaveNotice(`🗑️ Configuration [${fenceId}] deleted from PostGIS database.`);
+      setTimeout(() => setSaveNotice(null), 4000);
+    }
   };
 
   const handleToggleActive = async () => {
     const nextStatus = isActive ? 'INACTIVE' : 'ACTIVE';
     setIsActive(!isActive);
-    await apiService.toggleVirtualFence('VF-01', nextStatus);
+    await apiService.toggleVirtualFence(currentEditingFenceId, nextStatus);
+    await refreshStoredFences();
   };
 
   // SVG Polygon Points String Calculation
@@ -242,7 +300,7 @@ export const VirtualFencePage: React.FC = () => {
   const calculatedVolume = calculatedArea * heightMeters;
 
   return (
-    <div className="flex flex-col gap-4 select-none">
+    <div className="flex flex-col gap-4 select-none relative">
       {/* Header Bar */}
       <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -257,13 +315,22 @@ export const VirtualFencePage: React.FC = () => {
               </span>
             </h1>
             <span className="font-mono text-[11px] text-outline">
-              CALIBRATED POLYGON HEURISTICS · 3D BOUNDING VOLUME & COLLISION DETECTOR
+              CALIBRATED TRIPWIRE & POLYGON STUDIO · POSTGRESQL / POSTGIS GEOMETRY STORAGE
             </span>
           </div>
         </div>
 
-        {/* Breach Test & Operator Role Badge */}
-        <div className="flex items-center gap-2 font-mono text-xs">
+        {/* Database Stored Configurations Drawer Toggle & Breach Test */}
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          {/* Stored Configurations Modal Trigger */}
+          <button
+            onClick={() => setShowStoredDrawer(true)}
+            className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-primary/40 text-primary font-bold transition-all flex items-center gap-1.5 shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[16px]">database</span>
+            <span>DATABASE CONFIGURATIONS ({storedFences.length})</span>
+          </button>
+
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-container border border-surface-container-high text-outline">
             <span className="w-2 h-2 rounded-full bg-secondary"></span>
             <span className="text-[11px] font-bold text-on-surface">
@@ -300,9 +367,62 @@ export const VirtualFencePage: React.FC = () => {
         </div>
       )}
 
-      {/* Main Studio Workspace Grid: Interactive Feed Canvas (Left 7 cols) & Parameter Controls (Right 5 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        {/* Interactive Feed & Geometry Canvas (7 cols) */}
+      {/* Stored Configurations Quick Selector Strip */}
+      <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-outline text-[11px] font-bold uppercase flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px] text-primary">inventory_2</span>
+            <span>SAVED TRIPWIRE PROFILES:</span>
+          </span>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {storedFences.map((f) => {
+              const isLoaded = f.id === currentEditingFenceId;
+              const isGloballyActive = f.id === activeFenceId;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => loadFenceIntoStudio(f)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 border transition-all ${
+                    isLoaded
+                      ? 'bg-primary/20 text-primary border-primary font-bold shadow-sm'
+                      : 'bg-surface-container-lowest text-outline hover:text-on-surface border-surface-container-high'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isGloballyActive ? 'bg-secondary animate-pulse' : 'bg-outline'
+                    }`}
+                  />
+                  <span>{f.name}</span>
+                  <span className="text-[9px] opacity-70">[{f.type || 'POLYGON'}]</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {currentEditingFenceId !== activeFenceId ? (
+            <button
+              onClick={() => handleActivateFence(currentEditingFenceId)}
+              className="px-2.5 py-1 rounded-lg bg-secondary text-on-secondary font-bold text-[11px] hover:bg-secondary/90 transition-all flex items-center gap-1 shadow-sm"
+            >
+              <span className="material-symbols-outlined text-[14px]">bolt</span>
+              <span>ACTIVATE IN LIVE SURVEILLANCE</span>
+            </button>
+          ) : (
+            <span className="px-2.5 py-1 rounded-lg bg-secondary/10 border border-secondary/40 text-secondary text-[10px] font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-ping" />
+              <span>LIVE ACTIVE TRIPWIRE</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Main Studio Stage Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Interactive Canvas Editor Stage (7 cols) */}
         <div className="lg:col-span-7 flex flex-col gap-3">
           {/* Source Target Selector & Geometry Mode Toolbar */}
           <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
@@ -311,7 +431,10 @@ export const VirtualFencePage: React.FC = () => {
               <span className="text-outline text-[10px] uppercase font-bold mr-1">FEED SOURCE:</span>
               <div className="flex items-center bg-surface-container rounded-lg p-0.5 border border-surface-container-high text-[11px]">
                 <button
-                  onClick={() => setSourceTarget('CAM-RGB-01')}
+                  onClick={() => {
+                    setSourceTarget('CAM-RGB-01');
+                    setIsSavedToDb(false);
+                  }}
                   className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
                     sourceTarget === 'CAM-RGB-01'
                       ? 'bg-primary text-on-primary font-bold shadow-sm'
@@ -323,7 +446,10 @@ export const VirtualFencePage: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setSourceTarget('CAM-LWIR-01')}
+                  onClick={() => {
+                    setSourceTarget('CAM-LWIR-01');
+                    setIsSavedToDb(false);
+                  }}
                   className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
                     sourceTarget === 'CAM-LWIR-01'
                       ? 'bg-tertiary text-on-tertiary font-bold shadow-sm'
@@ -335,7 +461,10 @@ export const VirtualFencePage: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setSourceTarget('TACTICAL_MAP')}
+                  onClick={() => {
+                    setSourceTarget('TACTICAL_MAP');
+                    setIsSavedToDb(false);
+                  }}
                   className={`px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1 ${
                     sourceTarget === 'TACTICAL_MAP'
                       ? 'bg-secondary text-on-secondary font-bold shadow-sm'
@@ -350,7 +479,7 @@ export const VirtualFencePage: React.FC = () => {
 
             {/* Geometry Mode Selector */}
             <div className="flex items-center gap-1">
-              <span className="text-outline text-[10px] uppercase font-bold mr-1">TYPE:</span>
+              <span className="text-outline text-[10px] uppercase font-bold mr-1">GEOMETRY:</span>
               <div className="flex items-center bg-surface-container rounded-lg p-0.5 border border-surface-container-high text-[11px]">
                 <button
                   onClick={() => handleSwitchFenceType('TRIPWIRE')}
@@ -455,7 +584,7 @@ export const VirtualFencePage: React.FC = () => {
                     filter="url(#laserGlow)"
                   />
 
-                  {/* Vertical Laser Pillars Connecting Floor Nodes to Ceiling Nodes */}
+                  {/* Vertical Laser Pillars connecting base to ceiling */}
                   {points.map((p, idx) => (
                     <line
                       key={`pillar-${idx}`}
@@ -465,44 +594,45 @@ export const VirtualFencePage: React.FC = () => {
                       y2={Math.max(10, p.y * 5 - heightMeters * 12)}
                       stroke={isFenceBreached ? '#ff5449' : '#adc6ff'}
                       strokeWidth="1.5"
-                      strokeDasharray="3,3"
-                      filter="url(#laserGlow)"
+                      strokeDasharray="4,4"
+                      opacity="0.8"
                     />
                   ))}
                 </g>
               )}
 
-              {/* Floor Polygon / Tripwire Geometry */}
+              {/* Laser Wire / Floor Geofence Rendering */}
               {fenceType === 'TRIPWIRE' ? (
-                /* 2-Point Linear Tripwire Laser */
                 points.length >= 2 && (
                   <g>
-                    {/* Glow Aura Line */}
+                    {/* Laser Tripwire Outer Glow Line */}
                     <line
                       x1={points[0].x * 8}
                       y1={points[0].y * 5}
                       x2={points[1].x * 8}
                       y2={points[1].y * 5}
                       stroke={isFenceBreached ? '#ff5449' : '#38bdf8'}
-                      strokeWidth="8"
-                      opacity="0.3"
+                      strokeWidth="3.5"
+                      strokeDasharray="6,4"
                       filter={isFenceBreached ? 'url(#breachGlow)' : 'url(#laserGlow)'}
+                      className={isFenceBreached ? 'animate-pulse' : ''}
                     />
-                    {/* Core Laser Line */}
+
+                    {/* Solid Inner Core Laser Beam */}
                     <line
                       x1={points[0].x * 8}
                       y1={points[0].y * 5}
                       x2={points[1].x * 8}
                       y2={points[1].y * 5}
-                      stroke={isFenceBreached ? '#ffb4ab' : '#ffffff'}
-                      strokeWidth="2.5"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
                     />
 
-                    {/* Tripwire Center Trigger Indicator */}
+                    {/* Directional Chevron Marker at Midpoint */}
                     <circle
-                      cx={(points[0].x + points[1].x) * 4}
-                      cy={(points[0].y + points[1].y) * 2.5}
-                      r="7"
+                      cx={((points[0].x + points[1].x) / 2) * 8}
+                      cy={((points[0].y + points[1].y) / 2) * 5}
+                      r="9"
                       fill={isFenceBreached ? '#ff5449' : '#38bdf8'}
                       stroke="#0a0e16"
                       strokeWidth="2"
@@ -592,7 +722,7 @@ export const VirtualFencePage: React.FC = () => {
                 <span>Click & drag handles to reshape boundary · Click canvas to add node</span>
               </span>
               <span className="text-secondary font-bold">
-                {points.length} ACTIVE VERTICES
+                {points.length} ACTIVE VERTICES · ID: {currentEditingFenceId}
               </span>
             </div>
           </div>
@@ -615,7 +745,7 @@ export const VirtualFencePage: React.FC = () => {
                   className="font-headline text-sm font-bold text-on-surface uppercase bg-transparent border-b border-dashed border-outline focus:border-primary focus:outline-none"
                 />
                 <span className="font-mono text-[11px] text-outline mt-0.5">
-                  POSTGIS RECTANGLE & POLYGON ID: VF-01
+                  POSTGIS GEOMETRY ID: {currentEditingFenceId}
                 </span>
               </div>
 
@@ -766,7 +896,7 @@ export const VirtualFencePage: React.FC = () => {
                 </span>
                 <span className="text-[10px] text-outline">PostGIS WGS-84</span>
               </div>
-              <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+              <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1">
                 {points.map((pt, idx) => (
                   <div
                     key={`pt-node-${idx}`}
@@ -806,25 +936,196 @@ export const VirtualFencePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Save to PostgreSQL / PostGIS Action Button */}
-            <div className="flex flex-col gap-2">
+            {/* Save Actions & Database Commit */}
+            <div className="flex flex-col gap-2 pt-1">
               <button
-                onClick={handleSaveToPostgis}
-                className="w-full py-3 rounded-lg bg-primary text-on-primary font-headline text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(173,198,255,0.35)] flex items-center justify-center gap-2"
+                onClick={() => handleSaveToPostgis(false)}
+                className="w-full py-2.5 rounded-lg bg-primary text-on-primary font-headline text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(173,198,255,0.35)] flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-[18px]">save</span>
-                <span>SAVE TO POSTGIS DATABASE (TRINETRA_DB)</span>
+                <span>COMMIT & SAVE TO POSTGIS (TRINETRA_DB)</span>
+              </button>
+
+              <button
+                onClick={() => handleSaveToPostgis(true)}
+                className="w-full py-2 rounded-lg bg-surface-container-high hover:bg-surface-container-highest border border-surface-container-highest text-on-surface font-headline text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px] text-secondary">add_circle</span>
+                <span>SAVE AS NEW DATABASE PROFILE</span>
               </button>
 
               {!isSavedToDb && (
                 <span className="text-center font-mono text-[10px] text-tertiary font-semibold animate-pulse">
-                  ⚠️ Unsaved geometry modifications detected. Click save to commit changes.
+                  ⚠️ Unsaved modifications. Click commit to sync with database & live feeds.
                 </span>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Database Stored Configurations Modal / Drawer */}
+      {showStoredDrawer && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-4xl max-h-[85vh] rounded-2xl bg-surface-container-low border border-primary/40 shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-surface-container border-b border-surface-container-high flex items-center justify-between font-mono">
+              <div className="flex items-center gap-2.5">
+                <span className="material-symbols-outlined text-primary text-2xl">database</span>
+                <div>
+                  <h2 className="font-headline text-base font-bold uppercase text-on-surface">
+                    PostgreSQL / PostGIS Stored Virtual Tripwires & Geofences
+                  </h2>
+                  <span className="text-[11px] text-outline">
+                    DATABASE: trinetra_db · SPATIAL SCHEMA: public.virtual_fences (SRID: 4326)
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowStoredDrawer(false)}
+                className="p-1.5 rounded-lg bg-surface-container-highest hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content / Cards Grid */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex flex-col gap-3.5 font-mono">
+              <div className="flex items-center justify-between text-xs text-outline pb-1 border-b border-surface-container-high/50">
+                <span>COMMITTED PROFILES ({storedFences.length})</span>
+                <span className="text-secondary font-bold">
+                  ACTIVE IN LIVE SURVEILLANCE: {storedFences.find((f) => f.id === activeFenceId)?.name || activeFenceId}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {storedFences.map((fence) => {
+                  const isGloballyActive = fence.id === activeFenceId;
+                  const isCurrentlyInStudio = fence.id === currentEditingFenceId;
+                  return (
+                    <div
+                      key={fence.id}
+                      className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
+                        isGloballyActive
+                          ? 'bg-surface-container-lowest border-secondary shadow-[0_0_15px_rgba(56,189,248,0.18)] ring-1 ring-secondary/50'
+                          : isCurrentlyInStudio
+                          ? 'bg-surface-container-lowest border-primary/60'
+                          : 'bg-surface-container-lowest border-surface-container-high hover:border-outline'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {/* Title & Badges */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex flex-col">
+                            <span className="font-headline text-sm font-bold text-on-surface uppercase">
+                              {fence.name}
+                            </span>
+                            <span className="text-[10px] text-outline">ID: {fence.id} · {fence.sector}</span>
+                          </div>
+
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              fence.type === 'TRIPWIRE'
+                                ? 'bg-primary/20 text-primary border border-primary/40'
+                                : fence.type === '3D_SURROUNDING'
+                                ? 'bg-tertiary/20 text-tertiary border border-tertiary/40'
+                                : 'bg-secondary/20 text-secondary border border-secondary/40'
+                            }`}
+                          >
+                            {fence.type || 'POLYGON'}
+                          </span>
+                        </div>
+
+                        {/* Status & Camera Target */}
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                          <span className="px-2 py-0.5 rounded bg-surface-container border border-surface-container-high text-outline">
+                            FEED: {fence.sourceTarget || 'CAM-RGB-01'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-surface-container border border-surface-container-high text-outline">
+                            {fence.points?.length || 0} VERTICES
+                          </span>
+                          {fence.heightMeters && (
+                            <span className="px-2 py-0.5 rounded bg-surface-container border border-surface-container-high text-tertiary font-bold">
+                              {fence.heightMeters}M 3D HEIGHT
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 rounded bg-surface-container border border-surface-container-high text-primary">
+                            THRESHOLD: {fence.confidenceThreshold || 85}%
+                          </span>
+                        </div>
+
+                        {/* WKT Snippet */}
+                        {fence.postgisWkt && (
+                          <div className="p-2 rounded bg-surface-container-low text-[9px] text-outline truncate font-mono border border-surface-container-high">
+                            {fence.postgisWkt}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Card Action Buttons */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-surface-container-high/60 text-xs">
+                        <div className="flex items-center gap-1">
+                          {isGloballyActive ? (
+                            <span className="px-2 py-1 rounded bg-secondary/15 border border-secondary/40 text-secondary text-[10px] font-bold flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-ping" />
+                              <span>ACTIVE IN LIVE FEEDS</span>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleActivateFence(fence.id)}
+                              className="px-2.5 py-1 rounded bg-secondary text-on-secondary font-bold text-[11px] hover:bg-secondary/90 transition-all flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">bolt</span>
+                              <span>ACTIVATE</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              loadFenceIntoStudio(fence);
+                              setShowStoredDrawer(false);
+                            }}
+                            className="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-container-high border border-surface-container-high text-on-surface text-[11px] font-semibold transition-colors flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[13px] text-primary">edit</span>
+                            <span>EDIT</span>
+                          </button>
+
+                          {storedFences.length > 1 && (
+                            <button
+                              onClick={() => handleDeleteFence(fence.id)}
+                              title="Delete configuration"
+                              className="p-1 rounded hover:bg-error/20 hover:text-error text-outline transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-surface-container border-t border-surface-container-high flex items-center justify-between font-mono text-xs">
+              <span className="text-outline text-[11px]">
+                Modifications in the studio sync directly with live video inference pipelines.
+              </span>
+              <button
+                onClick={() => setShowStoredDrawer(false)}
+                className="px-4 py-1.5 rounded-lg bg-primary text-on-primary font-bold hover:bg-primary/90 transition-colors"
+              >
+                DONE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

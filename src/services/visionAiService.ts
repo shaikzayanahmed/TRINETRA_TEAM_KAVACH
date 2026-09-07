@@ -1,9 +1,48 @@
 import { AnprRecord } from '../types';
 import { anprService } from './anprService';
 import { yoloService } from './yoloService';
+import { apiService } from './apiService';
 import { BBoxOneEuroFilter } from '../utils/oneEuroFilter';
 
 export type DetectionFilterMode = 'MOVING_VEHICLES' | 'ALL_VEHICLES' | 'ALL_OBJECTS';
+
+function checkTargetFenceBreach(cx: number, cy: number): boolean {
+  try {
+    const fence = apiService.getActiveFenceSync();
+    if (!fence || fence.status === 'INACTIVE' || !fence.points || fence.points.length < 2) {
+      return false;
+    }
+    const pts = fence.points;
+    const type = fence.type || 'POLYGON';
+
+    if (type === 'TRIPWIRE') {
+      const p1 = pts[0];
+      const p2 = pts[1];
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const l2 = dx * dx + dy * dy;
+      if (l2 === 0) return Math.hypot(cx - p1.x, cy - p1.y) < 8;
+      let t = ((cx - p1.x) * dx + (cy - p1.y) * dy) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projX = p1.x + t * dx;
+      const projY = p1.y + t * dy;
+      return Math.hypot(cx - projX, cy - projY) < 7.5;
+    }
+
+    // Polygon / 3D volumetric floor perimeter
+    if (pts.length >= 3) {
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i].x, yi = pts[i].y;
+        const xj = pts[j].x, yj = pts[j].y;
+        const intersect = ((yi > cy) !== (yj > cy)) && (cx < ((xj - xi) * (cy - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+  } catch (e) {}
+  return cx > 38 && cx < 88 && cy > 20 && cy < 85;
+}
 
 export interface DetectOptions {
   filterMode?: DetectionFilterMode;
@@ -440,7 +479,7 @@ class VisionAiService {
           continue;
         }
 
-        const isTripwireBreach = smoothedCx > 38 && smoothedCx < 88 && smoothedCy > 20 && smoothedCy < 85;
+        const isTripwireBreach = checkTargetFenceBreach(smoothedCx, smoothedCy);
 
         mappedResults.push({
           id: existing.id,
@@ -534,7 +573,7 @@ class VisionAiService {
           continue;
         }
 
-        const isTripwireBreach = cand.cx > 38 && cand.cx < 88 && cand.cy > 20 && cand.cy < 85;
+        const isTripwireBreach = checkTargetFenceBreach(cand.cx, cand.cy);
 
         mappedResults.push({
           id: newId,
@@ -588,7 +627,7 @@ class VisionAiService {
             const smoothed = track.bboxFilter.filter(currentX, currentY, track.width, track.height, now);
             const centerX = smoothed.x + smoothed.width / 2;
             const centerY = smoothed.y + smoothed.height / 2;
-            const isTripwireBreach = centerX > 38 && centerX < 88 && centerY > 20 && centerY < 85;
+            const isTripwireBreach = checkTargetFenceBreach(centerX, centerY);
 
             mappedResults.push({
               id: track.id,

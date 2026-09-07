@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Camera } from '../types';
+import { Link } from 'react-router-dom';
+import { Camera, VirtualFence } from '../types';
 import { apiService } from '../services/apiService';
 import { CameraPanel } from '../components/camera/CameraPanel';
 import { useDemo } from '../context/DemoContext';
@@ -12,9 +13,18 @@ export const LiveSurveillancePage: React.FC = () => {
   const [showOverlays, setShowOverlays] = useState<boolean>(true);
   const [opticalFilter, setOpticalFilter] = useState<'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS'>('STANDARD');
   const [viewMode, setViewMode] = useState<SurveillanceViewMode>('SPLIT');
+  const [fences, setFences] = useState<VirtualFence[]>([]);
+  const [activeFenceId, setActiveFenceId] = useState<string>('VF-01');
 
   const { activeTarget, isFenceBreached, startDemo, isRunning } = useDemo();
   const { isOperator, isAdmin } = useAuth();
+
+  const loadFences = async () => {
+    const list = await apiService.getVirtualFences();
+    setFences(list);
+    const active = apiService.getActiveFenceSync();
+    if (active) setActiveFenceId(active.id);
+  };
 
   useEffect(() => {
     const fetchCameras = async () => {
@@ -22,7 +32,27 @@ export const LiveSurveillancePage: React.FC = () => {
       setCameras(data);
     };
     fetchCameras();
+    loadFences();
+
+    const handleFenceUpdate = (e: any) => {
+      if (e.detail?.activeFence) {
+        setActiveFenceId(e.detail.activeFence.id);
+      }
+      if (e.detail?.allFences) {
+        setFences(e.detail.allFences);
+      } else {
+        loadFences();
+      }
+    };
+
+    window.addEventListener('trinetra_fence_updated', handleFenceUpdate);
+    return () => window.removeEventListener('trinetra_fence_updated', handleFenceUpdate);
   }, []);
+
+  const handleSwitchActiveFence = async (id: string) => {
+    await apiService.setActiveFence(id);
+    setActiveFenceId(id);
+  };
 
   // Listen for Escape key to restore dual view
   useEffect(() => {
@@ -107,6 +137,30 @@ export const LiveSurveillancePage: React.FC = () => {
               <span className="material-symbols-outlined text-[14px]">podcasts</span>
               <span>LWIR / ANPR FULLSCREEN</span>
             </button>
+          </div>
+
+          {/* Active Database Stored Tripwire / Geofence Selector */}
+          <div className="flex items-center gap-1 bg-surface-container border border-surface-container-high rounded-lg p-1 text-[11px]">
+            <span className="material-symbols-outlined text-[14px] text-primary ml-1">fence</span>
+            <span className="text-outline text-[10px] uppercase font-bold hidden xl:inline">TRIPWIRE:</span>
+            <select
+              value={activeFenceId}
+              onChange={(e) => handleSwitchActiveFence(e.target.value)}
+              className="bg-surface-container-lowest text-on-surface border border-surface-container-high rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold focus:border-primary focus:outline-none cursor-pointer"
+            >
+              {fences.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.type || 'POLYGON'})
+                </option>
+              ))}
+            </select>
+            <Link
+              to="/virtual-fence"
+              title="Open Virtual Fence & Tripwire Studio to Edit / Calibrate"
+              className="p-1 rounded hover:bg-surface-container-high text-primary flex items-center justify-center transition-colors"
+            >
+              <span className="material-symbols-outlined text-[14px]">tune</span>
+            </Link>
           </div>
 
           <button

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useLiveVision } from '../../hooks/useLiveVision';
 import { DetectionFilterMode } from '../../services/visionAiService';
 import { DetectionOverlay } from './DetectionOverlay';
+import { VirtualFenceOverlay } from './VirtualFenceOverlay';
 
 interface VideoStreamFeedProps {
   showDetection?: boolean;
@@ -254,6 +255,14 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
             </div>
           </div>
 
+          {/* Configured PostGIS Virtual Tripwire / Geofence Overlay */}
+          {showDetection && (
+            <VirtualFenceOverlay
+              cameraId="CAM-LWIR-01"
+              isThermal={spectralFilter !== 'OPTICAL'}
+            />
+          )}
+
           {/* Real-time AI Detections & ANPR Badges Over Video */}
           {showDetection &&
             useLiveAi &&
@@ -261,8 +270,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
               <DetectionOverlay
                 key={det.id}
                 liveDetection={det}
-                isBreached={false}
-                isTripwireDisabled={true}
+                isBreached={det.isTripwireBreach}
                 isThermal={spectralFilter !== 'OPTICAL'}
               />
             ))}
