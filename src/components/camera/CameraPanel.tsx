@@ -3,6 +3,7 @@ import { Camera } from '../../types';
 import { WebcamFeed } from './WebcamFeed';
 import { ThermalFeedPlaceholder } from './ThermalFeedPlaceholder';
 import { VideoStreamFeed } from './VideoStreamFeed';
+import { useAuth } from '../../context/AuthContext';
 
 interface CameraPanelProps {
   camera: Camera;
@@ -19,6 +20,9 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
   isFullscreen = false,
   onToggleFullscreen,
 }) => {
+  const { isOperator, isAdmin } = useAuth();
+  const effectiveShowDetection = (isOperator || isAdmin) && showDetection;
+
   // Bulletproof fallback in case camera is undefined
   const safeCamera = camera || { type: 'RGB', status: 'OFFLINE', name: 'UNKNOWN', id: 'N/A', resolution: '1080P' };
   const isRGB = safeCamera.type === 'RGB';
@@ -131,10 +135,10 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
       {/* Video Content */}
       <div className={`w-full transition-all duration-300 ${getFilterClass()}`}>
         {isRGB ? (
-          <WebcamFeed showDetection={showDetection} />
+          <WebcamFeed showDetection={effectiveShowDetection} />
         ) : isStreamMode ? (
           <VideoStreamFeed
-            showDetection={showDetection}
+            showDetection={effectiveShowDetection}
             onCloseStream={() => setIsStreamMode(false)}
           />
         ) : (
