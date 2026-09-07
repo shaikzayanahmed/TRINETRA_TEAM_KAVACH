@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useDemo } from '../../context/DemoContext';
@@ -13,9 +13,8 @@ interface NavItem {
 }
 
 export const Sidebar: React.FC = () => {
-  const { user, role, isAdmin, isOperator, quickSwitchRole, logout } = useAuth();
+  const { user, role, isAdmin, isOperator, logout } = useAuth();
   const { isFenceBreached, activeAlert } = useDemo();
-  const [showRoleSwitcher, setShowRoleSwitcher] = useState<boolean>(false);
   const navigate = useNavigate();
 
   const navItems: NavItem[] = [
@@ -181,66 +180,18 @@ export const Sidebar: React.FC = () => {
         </nav>
       </div>
 
-      {/* Footer Profile & RBAC Live Role Switcher */}
+      {/* Footer Profile & Logout */}
       <div className="flex flex-col gap-2 pt-3 border-t border-surface-container-high/50 mt-3">
-        {/* Quick Role Switcher Panel */}
-        {showRoleSwitcher && (
-          <div className="p-2 rounded-lg bg-surface-container-lowest border border-primary/40 shadow-xl flex flex-col gap-1.5 text-[10px] font-mono animate-in fade-in slide-in-from-bottom-2 duration-150">
-            <span className="text-outline uppercase text-[9px] font-bold px-1">
-              Switch PostgreSQL Identity:
-            </span>
-            <div className="grid grid-cols-3 gap-1">
-              <button
-                onClick={async () => {
-                  await quickSwitchRole('admin');
-                  setShowRoleSwitcher(false);
-                }}
-                className={`px-1.5 py-1 rounded text-center font-bold border transition-colors ${
-                  isAdmin ? 'bg-error text-on-error border-error' : 'bg-surface-container hover:bg-surface-container-high text-error border-error/30'
-                }`}
-              >
-                ADMIN
-              </button>
-              <button
-                onClick={async () => {
-                  await quickSwitchRole('operator');
-                  setShowRoleSwitcher(false);
-                }}
-                className={`px-1.5 py-1 rounded text-center font-bold border transition-colors ${
-                  role === 'OPERATOR' ? 'bg-secondary text-on-secondary border-secondary' : 'bg-surface-container hover:bg-surface-container-high text-secondary border-secondary/30'
-                }`}
-              >
-                OPERATOR
-              </button>
-              <button
-                onClick={async () => {
-                  await quickSwitchRole('viewer');
-                  setShowRoleSwitcher(false);
-                }}
-                className={`px-1.5 py-1 rounded text-center font-bold border transition-colors ${
-                  role === 'VIEWER' ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container hover:bg-surface-container-high text-primary border-primary/30'
-                }`}
-              >
-                VIEWER
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Profile Card */}
         <div className="p-2.5 rounded-lg bg-surface-container-lowest shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] flex items-center justify-between">
-          <div
-            onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
-            className="flex items-center gap-2.5 overflow-hidden cursor-pointer group"
-            title="Click to switch PostgreSQL RBAC Role"
-          >
-            <div className="w-8 h-8 rounded bg-surface-container-high border border-surface-container-highest flex items-center justify-center text-primary font-mono text-xs font-bold shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] flex-shrink-0 group-hover:border-primary transition-colors">
-              {user?.username?.slice(0, 2).toUpperCase() || 'AD'}
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded bg-surface-container-high border border-surface-container-highest flex items-center justify-center text-primary font-mono text-xs font-bold shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] flex-shrink-0">
+              {user?.username?.slice(0, 2).toUpperCase() || 'US'}
             </div>
             <div className="flex flex-col overflow-hidden">
               <div className="flex items-center gap-1.5">
                 <span className="font-mono text-xs text-on-surface font-bold truncate">
-                  {user?.username || 'admin'}
+                  {user?.username || 'user'}
                 </span>
                 <span className={`px-1 py-0.2 rounded text-[8px] font-mono font-black border ${getRoleBadgeStyle()}`}>
                   {role}
@@ -248,27 +199,19 @@ export const Sidebar: React.FC = () => {
               </div>
               <div className="flex items-center gap-1 font-mono text-[9px] text-outline">
                 <span className="w-1 h-1 rounded-full bg-secondary" />
-                <span className="truncate">{user?.name || 'Commander'}</span>
+                <span className="truncate">{user?.name || 'Authorized User'}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
-              title="Switch RBAC Role"
-              className="p-1.5 rounded text-outline hover:text-primary hover:bg-surface-container transition-colors"
-            >
-              <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
-            </button>
-            <button
-              onClick={handleLogout}
-              title="Sign Out"
-              className="p-1.5 rounded text-outline hover:text-error hover:bg-surface-container transition-colors"
-            >
-              <span className="material-symbols-outlined text-[16px]">logout</span>
-            </button>
-          </div>
+          <button
+            onClick={handleLogout}
+            title="Log Out Session"
+            className="px-2.5 py-1.5 rounded-md bg-surface-container hover:bg-error/20 text-outline hover:text-error border border-surface-container-high hover:border-error/40 transition-all font-mono text-[10px] font-bold flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-[14px]">logout</span>
+            <span>LOGOUT</span>
+          </button>
         </div>
 
         {/* Database Footer Status */}
@@ -277,7 +220,7 @@ export const Sidebar: React.FC = () => {
             <span className="w-1 h-1 rounded-full bg-secondary animate-pulse" />
             PostgreSQL 5432
           </span>
-          <span className="text-primary font-semibold">{user?.securityClearance || 'TOP_SECRET'}</span>
+          <span className="text-primary font-semibold">{user?.securityClearance || 'CONFIDENTIAL'}</span>
         </div>
       </div>
     </aside>

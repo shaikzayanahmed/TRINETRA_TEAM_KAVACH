@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 interface RbacGuardProps {
@@ -14,7 +15,8 @@ export const RbacGuard: React.FC<RbacGuardProps> = ({
   fallbackTitle = 'ACCESS RESTRICTED · INSUFFICIENT SECURITY CLEARANCE',
   fallbackDescription,
 }) => {
-  const { role, isAdmin, isOperator, quickSwitchRole } = useAuth();
+  const { role, isAdmin, isOperator, logout } = useAuth();
+  const navigate = useNavigate();
 
   const hasAccess = () => {
     if (requiredRole === 'VIEWER') return true;
@@ -26,6 +28,11 @@ export const RbacGuard: React.FC<RbacGuardProps> = ({
   if (hasAccess()) {
     return <>{children}</>;
   }
+
+  const handleReauth = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="w-full min-h-[500px] flex flex-col items-center justify-center p-6 bg-surface-container-low border border-surface-container-high/60 rounded-xl text-center gap-4 select-none font-mono shadow-tactical-inset animate-in fade-in duration-200">
@@ -47,43 +54,21 @@ export const RbacGuard: React.FC<RbacGuardProps> = ({
         <p className="text-xs text-outline font-normal">
           {fallbackDescription || (
             <>
-              This tactical module requires <strong className="text-primary uppercase">[{requiredRole}]</strong> authorization. Your current PostgreSQL active role is <strong className="text-error uppercase">[{role}]</strong>.
+              This tactical module requires <strong className="text-primary uppercase">[{requiredRole}]</strong> authorization. Your current active role is <strong className="text-error uppercase">[{role}]</strong>.
             </>
           )}
         </p>
       </div>
 
-      {/* RBAC Elevation Actions */}
-      <div className="flex flex-col sm:flex-row items-center gap-2 mt-2">
-        <span className="text-[10px] text-outline">Quick Authorization Override:</span>
-        <div className="flex items-center gap-1.5">
-          {requiredRole === 'ADMIN' ? (
-            <button
-              onClick={() => quickSwitchRole('admin')}
-              className="px-3 py-1.5 rounded-lg bg-error text-on-error font-headline text-xs font-bold uppercase tracking-wider hover:bg-error/90 transition-all shadow-[0_0_12px_rgba(255,180,171,0.4)] flex items-center gap-1"
-            >
-              <span className="material-symbols-outlined text-[15px]">shield_person</span>
-              <span>Elevate to ADMIN (Commander)</span>
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => quickSwitchRole('operator')}
-                className="px-3 py-1.5 rounded-lg bg-secondary text-on-secondary font-headline text-xs font-bold uppercase tracking-wider hover:bg-secondary/90 transition-all shadow-[0_0_12px_rgba(149,212,176,0.4)] flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[15px]">military_tech</span>
-                <span>Elevate to OPERATOR</span>
-              </button>
-              <button
-                onClick={() => quickSwitchRole('admin')}
-                className="px-3 py-1.5 rounded-lg bg-error text-on-error font-headline text-xs font-bold uppercase tracking-wider hover:bg-error/90 transition-all shadow-[0_0_12px_rgba(255,180,171,0.4)] flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[15px]">shield_person</span>
-                <span>ADMIN</span>
-              </button>
-            </>
-          )}
-        </div>
+      {/* Re-authenticate Action */}
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          onClick={handleReauth}
+          className="px-4 py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary border border-primary/40 font-headline text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+        >
+          <span className="material-symbols-outlined text-[16px]">logout</span>
+          <span>LOG IN WITH {requiredRole} ACCOUNT</span>
+        </button>
       </div>
 
       {/* Security Classification Footer */}
