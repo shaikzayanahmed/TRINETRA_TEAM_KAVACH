@@ -12,6 +12,7 @@ import {
 
 export const MOCK_USER: User = {
   id: 'USR-8821',
+  username: 'operator',
   callsign: 'SIH-UNIT-ALPHA',
   name: 'Capt. Aryan Sharma',
   role: 'SECTOR_OPERATOR',

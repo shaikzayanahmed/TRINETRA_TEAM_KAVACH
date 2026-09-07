@@ -185,14 +185,19 @@ export interface AuditEvent {
   status: 'VERIFIED' | 'LOGGED' | 'FLAGGED';
 }
 
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'VIEWER' | 'SYSTEM_ADMIN' | 'TACTICAL_COMMANDER' | 'SECTOR_OPERATOR';
+
 export interface User {
   id: string;
+  username: string;
   callsign: string;
   name: string;
-  role: 'SECTOR_OPERATOR' | 'TACTICAL_COMMANDER' | 'SYSTEM_ADMIN';
+  email?: string;
+  role: UserRole;
   unit: string;
   sector: string;
-  securityClearance: 'RESTRICTED' | 'SECRET' | 'TOP_SECRET';
+  securityClearance: 'RESTRICTED' | 'CONFIDENTIAL' | 'SECRET' | 'TOP_SECRET';
+  databaseConnected?: boolean;
 }
 
 export interface DemoState {
