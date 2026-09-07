@@ -55,7 +55,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Live Vision AI Object Detection + ANPR Hook
-  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine } = useLiveVision(videoRef, {
+  const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine, providerDescription } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !!videoSrc && isPlaying,
     detectionIntervalMs: 60,
     filterMode,
@@ -532,12 +532,15 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
               </div>
             </div>
 
-            {/* Real-time AI Latency & Resolution Status */}
+            {/* Real-time AI Latency, GPU Acceleration & Resolution Status */}
             <div className="flex items-center gap-2 text-[10px]">
               {isModelReady && useLiveAi && (
-                <div className="flex items-center gap-1 text-secondary">
+                <div className="flex items-center gap-1.5 text-secondary">
                   <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
                   <span className="font-bold text-primary">{activeEngine || 'YOLOv8'}</span>
+                  <span className="px-1 py-0.2 rounded bg-secondary/20 text-secondary text-[8px] font-mono border border-secondary/40 font-bold uppercase">
+                    {providerDescription || 'GPU ACCELERATED'}
+                  </span>
                   <span>: {lastInferenceTimeMs || 10}ms ({fps || 15} FPS)</span>
                 </div>
               )}

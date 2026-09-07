@@ -26,6 +26,7 @@ export const useLiveVision = (
   const lastFpsCheckRef = useRef<number>(performance.now());
 
   const [activeEngine, setActiveEngine] = useState<'YOLOv8'>('YOLOv8');
+  const [providerDescription, setProviderDescription] = useState<string>('NVIDIA GPU / WebGPU');
 
   // Load the model on mount
   useEffect(() => {
@@ -35,6 +36,7 @@ export const useLiveVision = (
       const ready = await visionAiService.loadModel();
       if (isMounted) {
         setIsModelReady(ready);
+        setProviderDescription(visionAiService.getProviderDescription());
         setIsModelLoading(false);
       }
     };
@@ -129,5 +131,6 @@ export const useLiveVision = (
     fps,
     isDemoRunning,
     activeEngine,
+    providerDescription,
   };
 };

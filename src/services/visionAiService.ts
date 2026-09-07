@@ -98,6 +98,10 @@ class VisionAiService {
     return this.isReady && yoloService.isModelLoaded();
   }
 
+  getProviderDescription(): string {
+    return yoloService.getProviderDescription();
+  }
+
   /**
    * Computes cardinal direction / heading label from motion vector
    */

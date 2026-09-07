@@ -19,10 +19,14 @@ const YOLO_CLASSES = [
   'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ];
 
+export type ExecutionProviderType = 'webgpu' | 'webgl' | 'wasm';
+
 export class YoloService {
   private session: ort.InferenceSession | null = null;
   private isLoading: boolean = false;
   private isReady: boolean = false;
+  private activeProvider: ExecutionProviderType = 'wasm';
+  private providerDescription: string = 'CPU (WASM SIMD)';
   private readonly inputWidth: number = 640;
   private readonly inputHeight: number = 640;
   private offscreenCanvas: HTMLCanvasElement | null = null;
@@ -40,9 +44,14 @@ export class YoloService {
         ort.env.wasm.wasmPaths = '/';
       }
       
-      const cores = typeof navigator !== 'undefined' ? Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1)) : 2;
+      const cores = typeof navigator !== 'undefined' ? Math.min(6, Math.max(1, (navigator.hardwareConcurrency || 4) - 1)) : 4;
       ort.env.wasm.numThreads = cores;
       ort.env.wasm.simd = true;
+
+      // Prioritize High-Performance Discrete GPU (NVIDIA GeForce GTX 1650 Ti / RTX)
+      if (ort.env && (ort.env as any).webgpu) {
+        (ort.env as any).webgpu.powerPreference = 'high-performance';
+      }
     } catch (e) {
       console.warn('ONNX environment initialization note:', e);
     }
@@ -56,20 +65,41 @@ export class YoloService {
     const defaultUrl = modelUrl || '/models/yolov8n.onnx';
 
     try {
-      console.log(`[YOLOv8 Engine] Loading model weights with hardware acceleration from: ${defaultUrl}`);
-      
-      // Initialize ONNX InferenceSession with WebGL GPU acceleration if available, falling back to multi-threaded WASM
+      console.log(`[YOLOv8 Engine] Initializing GPU accelerated inference pipeline from: ${defaultUrl}`);
+
+      // Attempt 1: WebGPU (DirectX 12 / Vulkan - Discrete NVIDIA GPU)
       try {
+        console.log('[YOLOv8 Engine] Attempting WebGPU high-performance GPU initialization...');
         this.session = await ort.InferenceSession.create(defaultUrl, {
-          executionProviders: ['webgl', 'wasm'],
+          executionProviders: ['webgpu'],
           graphOptimizationLevel: 'all',
         });
-      } catch {
-        // Fallback directly to multi-threaded WASM
-        this.session = await ort.InferenceSession.create(defaultUrl, {
-          executionProviders: ['wasm'],
-          graphOptimizationLevel: 'all',
-        });
+        this.activeProvider = 'webgpu';
+        this.providerDescription = 'NVIDIA GPU (WebGPU / DX12)';
+        console.log('🚀 [YOLOv8 Engine] WebGPU hardware accelerator engaged successfully!');
+      } catch (webgpuErr) {
+        console.warn('[YOLOv8 Engine] WebGPU unavailable, trying WebGL GPU shader fallback...', webgpuErr);
+
+        // Attempt 2: WebGL (GPU Accelerated)
+        try {
+          this.session = await ort.InferenceSession.create(defaultUrl, {
+            executionProviders: ['webgl'],
+            graphOptimizationLevel: 'all',
+          });
+          this.activeProvider = 'webgl';
+          this.providerDescription = 'GPU Accelerated (WebGL)';
+          console.log('⚡ [YOLOv8 Engine] WebGL GPU accelerator engaged successfully!');
+        } catch (webglErr) {
+          console.warn('[YOLOv8 Engine] WebGL unavailable, falling back to multi-threaded WASM SIMD...', webglErr);
+
+          // Attempt 3: Multi-threaded WASM SIMD (Optimized CPU)
+          this.session = await ort.InferenceSession.create(defaultUrl, {
+            executionProviders: ['wasm'],
+            graphOptimizationLevel: 'all',
+          });
+          this.activeProvider = 'wasm';
+          this.providerDescription = 'CPU (WASM SIMD Multi-Core)';
+        }
       }
 
       this.offscreenCanvas = document.createElement('canvas');
@@ -79,13 +109,21 @@ export class YoloService {
 
       this.isReady = true;
       this.isLoading = false;
-      console.log('✅ [YOLOv8 Engine] Ultralytics YOLOv8 ONNX model primed successfully!');
+      console.log(`✅ [YOLOv8 Engine] Ultralytics YOLOv8 ONNX model primed successfully on [${this.providerDescription}]!`);
       return true;
     } catch (err) {
       console.error('❌ [YOLOv8 Engine] Failed to load YOLOv8 model:', err);
       this.isLoading = false;
       return false;
     }
+  }
+
+  public getExecutionProvider(): ExecutionProviderType {
+    return this.activeProvider;
+  }
+
+  public getProviderDescription(): string {
+    return this.providerDescription;
   }
 
   public isModelLoaded(): boolean {
