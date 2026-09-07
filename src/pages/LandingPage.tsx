@@ -252,17 +252,6 @@ export const LandingPage: React.FC = () => {
           High-precision multi-sensor surveillance engineered for remote perimeters. Eliminates cloud-dependency by processing raw visual and thermal streams directly on ruggedized edge nodes, transmitting only cryptographically hashed metadata over constrained networks.
         </p>
 
-        {/* CTA Group */}
-        <div className="flex flex-wrap items-center justify-center gap-4 mt-8">
-          <Link
-            to="/login"
-            className="px-8 py-3.5 rounded-xl bg-primary text-on-primary font-headline text-sm font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(173,198,255,0.4)] hover:shadow-[0_0_30px_rgba(173,198,255,0.65)] hover:-translate-y-0.5 flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[20px]">lock_open</span>
-            <span>LOGIN TO SYSTEM</span>
-          </Link>
-        </div>
-
         {/* Interactive Interactive Perimeter Nodes Strip */}
         <div className="mt-12 w-full max-w-4xl p-3.5 rounded-xl bg-surface-container-low/80 backdrop-blur border border-surface-container-high/60 shadow-tactical-plate flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
           <div className="flex items-center gap-2.5">
