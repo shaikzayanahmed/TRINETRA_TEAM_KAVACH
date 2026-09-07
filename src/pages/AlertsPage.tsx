@@ -24,6 +24,19 @@ export const AlertsPage: React.FC = () => {
 
   useEffect(() => {
     fetchAlerts();
+    const interval = setInterval(fetchAlerts, 3000);
+
+    const handleLiveBreach = (e: any) => {
+      if (e.detail?.alert) {
+        setAlerts((prev) => [e.detail.alert, ...prev.filter((a) => a.id !== e.detail.alert.id)]);
+        setSelectedAlert(e.detail.alert);
+      }
+    };
+    window.addEventListener('trinetra_live_breach', handleLiveBreach);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('trinetra_live_breach', handleLiveBreach);
+    };
   }, []);
 
   useEffect(() => {

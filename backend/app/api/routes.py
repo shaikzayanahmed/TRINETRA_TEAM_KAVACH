@@ -122,10 +122,17 @@ async def create_alert(
     meta = payload.metadata or payload.metadata_json or {}
     ts = datetime.fromisoformat(payload.timestamp) if payload.timestamp else datetime.now(timezone.utc)
 
+    track_uuid = None
+    if payload.track_id:
+        try:
+            track_uuid = uuid.UUID(payload.track_id)
+        except Exception:
+            track_uuid = None
+
     alert = Alert(
         id=uuid.uuid4(),
         camera_id=cam_id,
-        track_id=uuid.UUID(payload.track_id) if payload.track_id else None,
+        track_id=track_uuid,
         alert_type=a_type,
         severity=a_sev,
         confidence=payload.confidence or 95.0,

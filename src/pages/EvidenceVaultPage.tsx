@@ -27,13 +27,28 @@ export const EvidenceVaultPage: React.FC = () => {
 
   useEffect(() => {
     fetchEvidence();
-    // Poll every 3 seconds to catch newly recorded live ANPR vehicle captures
+    // Poll every 3 seconds to catch newly recorded live breach snapshots and ANPR captures
     const timer = setInterval(() => {
       apiService.getEvidence().then((data) => {
         setEvidenceList(data);
       });
     }, 3000);
-    return () => clearInterval(timer);
+
+    const handleLiveBreach = (e: any) => {
+      if (e.detail?.evidence) {
+        setEvidenceList((prev) => [e.detail.evidence, ...prev.filter((item) => item.id !== e.detail.evidence.id)]);
+        setSelectedEvidence(e.detail.evidence);
+      }
+    };
+
+    window.addEventListener('trinetra_live_breach', handleLiveBreach);
+    window.addEventListener('trinetra_evidence_updated', fetchEvidence);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('trinetra_live_breach', handleLiveBreach);
+      window.removeEventListener('trinetra_evidence_updated', fetchEvidence);
+    };
   }, []);
 
   // Playback timer simulation

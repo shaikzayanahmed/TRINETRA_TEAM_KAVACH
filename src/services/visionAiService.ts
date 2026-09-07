@@ -115,6 +115,57 @@ class VisionAiService {
   private nextHumanId: number = 101;
   private nextVehicleId: number = 201;
   private nextEntityId: number = 301;
+  private lastBreachReportMs: Map<string, number> = new Map();
+
+  private triggerLiveBreachAlert(
+    targetId: string,
+    streamId: string,
+    score: number,
+    videoElement: HTMLVideoElement,
+    now: number
+  ) {
+    const lastBreach = this.lastBreachReportMs.get(targetId) || 0;
+    if (now - lastBreach < 8000) {
+      return; // 8-second debounce per track
+    }
+    this.lastBreachReportMs.set(targetId, now);
+
+    const activeFence = apiService.getActiveFenceSync();
+    const zoneName = activeFence?.name || 'Sector 07 Zone Alpha';
+
+    // Capture real-time snapshot frame from video canvas
+    let snapshotBase64: string | undefined;
+    try {
+      if (videoElement && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.min(1280, videoElement.videoWidth);
+        canvas.height = Math.min(720, videoElement.videoHeight);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+          snapshotBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        }
+      }
+    } catch (e) {
+      console.warn('[VisionAiService] Failed to capture video snapshot:', e);
+    }
+
+    const { alert, evidence } = apiService.recordBreachEvidenceAndAlert({
+      targetId,
+      cameraId: streamId === 'DEFAULT_STREAM' ? 'CAM-RGB-01' : streamId,
+      zoneName,
+      confidence: score || 98.4,
+      snapshotBase64,
+    });
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent('trinetra_live_breach', {
+          detail: { alert, evidence, targetId, zoneName, timestamp: new Date().toISOString() },
+        })
+      );
+    } catch (e) {}
+  }
 
   private getActiveTracks(streamId: string): Map<string, ActiveTrack> {
     if (!this.streamTracks.has(streamId)) {
@@ -482,6 +533,10 @@ class VisionAiService {
         const isHuman = existing.class === 'PERSON' || existing.class === 'HUMAN';
         const isTripwireBreach = isHuman && checkTargetFenceBreach(smoothedCx, smoothedCy);
 
+        if (isTripwireBreach) {
+          this.triggerLiveBreachAlert(existing.id, streamId, cand.score, videoElement, now);
+        }
+
         mappedResults.push({
           id: existing.id,
           class: existing.class,
@@ -576,6 +631,10 @@ class VisionAiService {
 
         const isHuman = cand.upperClass === 'PERSON' || cand.upperClass === 'HUMAN';
         const isTripwireBreach = isHuman && checkTargetFenceBreach(cand.cx, cand.cy);
+
+        if (isTripwireBreach) {
+          this.triggerLiveBreachAlert(newId, streamId, cand.score, videoElement, now);
+        }
 
         mappedResults.push({
           id: newId,

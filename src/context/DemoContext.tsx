@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Target, Alert, Evidence } from '../types';
-import { MOCK_TARGET_2048, MOCK_ALERT_7821, MOCK_EVIDENCE_421 } from '../mocks/mockData';
+import { MOCK_TARGET_2048 } from '../mocks/mockData';
 import { wsService } from '../services/websocketService';
 import { apiService } from '../services/apiService';
 
@@ -81,6 +81,20 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isFenceBreached, setIsFenceBreached] = useState<boolean>(false);
   const [isDetectionVisible, setIsDetectionVisible] = useState<boolean>(false);
 
+  // Listen to live vision detections crossing the boundary
+  useEffect(() => {
+    const handleLiveBreach = (e: any) => {
+      if (e.detail?.alert && e.detail?.evidence) {
+        setIsFenceBreached(true);
+        setActiveAlert(e.detail.alert);
+        setActiveEvidence(e.detail.evidence);
+        setIsDetectionVisible(true);
+      }
+    };
+    window.addEventListener('trinetra_live_breach', handleLiveBreach);
+    return () => window.removeEventListener('trinetra_live_breach', handleLiveBreach);
+  }, []);
+
   // Apply step changes
   useEffect(() => {
     switch (step) {
@@ -115,15 +129,24 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsDetectionVisible(true);
         setIsFenceBreached(true);
         {
+          const activeFence = apiService.getActiveFenceSync();
+          const zoneName = activeFence?.name || 'Sector 07 Zone Alpha';
           const { alert, evidence } = apiService.recordBreachEvidenceAndAlert({
             targetId: 'TGT-2048',
             cameraId: 'CAM-RGB-01',
-            zoneName: 'Sector 07 Zone Alpha',
-            confidence: 96.8,
+            zoneName,
+            confidence: 98.4,
           });
           setActiveAlert(alert);
           setActiveEvidence(evidence);
           wsService.emit('alert_created', alert);
+          try {
+            window.dispatchEvent(
+              new CustomEvent('trinetra_live_breach', {
+                detail: { alert, evidence, targetId: 'TGT-2048', zoneName, timestamp: new Date().toISOString() },
+              })
+            );
+          } catch (e) {}
         }
         break;
 
@@ -132,9 +155,9 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveTarget({ ...MOCK_TARGET_2048, status: 'TRACKING' });
         setIsDetectionVisible(true);
         setIsFenceBreached(true);
-        setActiveAlert(MOCK_ALERT_7821);
-        setActiveEvidence(MOCK_EVIDENCE_421);
-        wsService.emit('evidence_captured', MOCK_EVIDENCE_421);
+        if (activeEvidence) {
+          wsService.emit('evidence_captured', activeEvidence);
+        }
         break;
 
       case 5:
@@ -142,8 +165,6 @@ export const DemoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveTarget({ ...MOCK_TARGET_2048, status: 'TRACKING' });
         setIsDetectionVisible(true);
         setIsFenceBreached(true);
-        setActiveAlert(MOCK_ALERT_7821);
-        setActiveEvidence(MOCK_EVIDENCE_421);
         break;
     }
   }, [step]);

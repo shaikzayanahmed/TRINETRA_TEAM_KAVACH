@@ -29,7 +29,6 @@ export const CommandCenterPage: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
       const [cams, tgts, alts, nodes] = await Promise.all([
         apiService.getCameras(),
         apiService.getTargets(),
@@ -43,6 +42,20 @@ export const CommandCenterPage: React.FC = () => {
       setIsLoading(false);
     };
     fetchData();
+
+    const interval = setInterval(fetchData, 3000);
+
+    const handleLiveBreach = (e: any) => {
+      if (e.detail?.alert) {
+        setAlert(e.detail.alert);
+      }
+    };
+    window.addEventListener('trinetra_live_breach', handleLiveBreach);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('trinetra_live_breach', handleLiveBreach);
+    };
   }, []);
 
   const displayTarget = activeTarget || target;
