@@ -4,6 +4,7 @@ import { Camera, Target, Alert, EdgeNode } from '../types';
 import { apiService } from '../services/apiService';
 import { CameraPanel } from '../components/camera/CameraPanel';
 import { useDemo } from '../context/DemoContext';
+import { useAuth } from '../context/AuthContext';
 
 export const CommandCenterPage: React.FC = () => {
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -14,6 +15,7 @@ export const CommandCenterPage: React.FC = () => {
   const [feedViewMode, setFeedViewMode] = useState<'SPLIT' | 'CAM-RGB-01' | 'CAM-LWIR-01'>('SPLIT');
 
   const { activeTarget, activeAlert, isFenceBreached } = useDemo();
+  const { isOperator, isAdmin } = useAuth();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,11 +77,22 @@ export const CommandCenterPage: React.FC = () => {
         <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col justify-between">
           <div className="flex items-center justify-between text-outline font-mono text-[11px]">
             <span>ACTIVE TARGETS</span>
-            <span className="material-symbols-outlined text-primary text-[18px]">person_search</span>
+            <span className={`material-symbols-outlined text-[18px] ${isOperator || isAdmin ? 'text-primary' : 'text-outline'}`}>
+              {isOperator || isAdmin ? 'person_search' : 'lock'}
+            </span>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="font-mono text-2xl font-bold text-primary">1 LOCK</span>
-            <span className="font-mono text-[10px] text-outline">TGT-2048</span>
+            {isOperator || isAdmin ? (
+              <>
+                <span className="font-mono text-2xl font-bold text-primary">1 LOCK</span>
+                <span className="font-mono text-[10px] text-outline">TGT-2048</span>
+              </>
+            ) : (
+              <>
+                <span className="font-mono text-sm font-bold text-outline uppercase tracking-wider">RESTRICTED</span>
+                <span className="font-mono text-[9px] text-outline">[OP CLEARANCE]</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -275,41 +288,63 @@ export const CommandCenterPage: React.FC = () => {
 
           {/* Target Summary Card */}
           {displayTarget && (
-            <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-2.5">
-              <div className="flex items-center justify-between border-b border-surface-container/70 pb-2">
-                <h3 className="font-headline text-sm uppercase tracking-wide text-on-surface font-semibold">
-                  TARGET SUMMARY
-                </h3>
-                <span className="material-symbols-outlined text-outline text-[18px]">person_search</span>
-              </div>
+            isOperator || isAdmin ? (
+              <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-2.5">
+                <div className="flex items-center justify-between border-b border-surface-container/70 pb-2">
+                  <h3 className="font-headline text-sm uppercase tracking-wide text-on-surface font-semibold">
+                    TARGET SUMMARY
+                  </h3>
+                  <span className="material-symbols-outlined text-outline text-[18px]">person_search</span>
+                </div>
 
-              <div className="flex items-center justify-between font-mono text-xs">
-                <span className="text-on-surface font-bold">{displayTarget.id}</span>
-                <span className="px-2 py-0.5 rounded bg-surface-container text-primary font-bold">
-                  {displayTarget.classification}
-                </span>
-              </div>
+                <div className="flex items-center justify-between font-mono text-xs">
+                  <span className="text-on-surface font-bold">{displayTarget.id}</span>
+                  <span className="px-2 py-0.5 rounded bg-surface-container text-primary font-bold">
+                    {displayTarget.classification}
+                  </span>
+                </div>
 
-              <div className="p-2.5 rounded-lg bg-surface-container-lowest shadow-tactical-inset grid grid-cols-2 gap-1.5 font-mono text-xs">
-                <div className="text-outline">Confidence:</div>
-                <div className="text-right text-secondary font-bold">{displayTarget.confidence}%</div>
-                <div className="text-outline">Sensor Lock:</div>
-                <div className="text-right text-primary font-semibold">{displayTarget.cameraId}</div>
-                <div className="text-outline">Status:</div>
-                <div className="text-right text-secondary font-bold">{displayTarget.status}</div>
-                <div className="text-outline">Coordinates:</div>
-                <div className="text-right text-on-surface text-[11px]">
-                  {displayTarget.coordinates.lat.toFixed(4)}, {displayTarget.coordinates.lng.toFixed(4)}
+                <div className="p-2.5 rounded-lg bg-surface-container-lowest shadow-tactical-inset grid grid-cols-2 gap-1.5 font-mono text-xs">
+                  <div className="text-outline">Confidence:</div>
+                  <div className="text-right text-secondary font-bold">{displayTarget.confidence}%</div>
+                  <div className="text-outline">Sensor Lock:</div>
+                  <div className="text-right text-primary font-semibold">{displayTarget.cameraId}</div>
+                  <div className="text-outline">Status:</div>
+                  <div className="text-right text-secondary font-bold">{displayTarget.status}</div>
+                  <div className="text-outline">Coordinates:</div>
+                  <div className="text-right text-on-surface text-[11px]">
+                    {displayTarget.coordinates.lat.toFixed(4)}, {displayTarget.coordinates.lng.toFixed(4)}
+                  </div>
+                </div>
+
+                <Link
+                  to="/targets"
+                  className="w-full py-2 rounded-lg bg-surface-container-high text-primary font-mono text-xs uppercase tracking-wider font-semibold border border-primary/20 shadow-tactical-extruded hover:bg-surface-container-highest transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span>[ VIEW TARGET TRACKING ]</span>
+                </Link>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-2.5">
+                <div className="flex items-center justify-between border-b border-surface-container/70 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-outline text-[18px]">lock</span>
+                    <h3 className="font-headline text-sm uppercase tracking-wide text-outline font-semibold">
+                      TARGET INTELLIGENCE
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-surface-container text-outline font-mono text-[10px] uppercase font-bold">
+                    OPERATOR ONLY
+                  </span>
+                </div>
+                <p className="font-mono text-xs text-outline leading-relaxed">
+                  Active target tracking coordinates, Kalman predictions, and optical telemetry are restricted from Viewer clearance accounts.
+                </p>
+                <div className="p-2.5 rounded-lg bg-surface-container-lowest/80 border border-surface-container-high/30 text-center font-mono text-[11px] text-outline">
+                  <span>[ 🔒 ELEVATE TO OPERATOR TO UNLOCK ]</span>
                 </div>
               </div>
-
-              <Link
-                to="/targets"
-                className="w-full py-2 rounded-lg bg-surface-container-high text-primary font-mono text-xs uppercase tracking-wider font-semibold border border-primary/20 shadow-tactical-extruded hover:bg-surface-container-highest transition-all flex items-center justify-center gap-1.5"
-              >
-                <span>[ VIEW TARGET TRACKING ]</span>
-              </Link>
-            </div>
+            )
           )}
 
           {/* Recent Activity Card */}

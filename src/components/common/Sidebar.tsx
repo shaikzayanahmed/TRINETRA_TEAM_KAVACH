@@ -29,7 +29,7 @@ export const Sidebar: React.FC = () => {
       badgeType: 'error',
       requiredRole: 'OPERATOR',
     },
-    { name: 'Targets Tracking', path: '/targets', icon: 'person_search', badge: '1 ACT', badgeType: 'primary', requiredRole: 'VIEWER' },
+    { name: 'Targets Tracking', path: '/targets', icon: 'person_search', badge: '1 ACT', badgeType: 'primary', requiredRole: 'OPERATOR' },
     { name: 'Tactical Map', path: '/map', icon: 'map', requiredRole: 'VIEWER' },
     {
       name: 'Virtual Fence',

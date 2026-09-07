@@ -264,20 +264,31 @@ export const LiveSurveillancePage: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-2">
           <div className="flex items-center justify-between font-mono text-xs border-b border-surface-container-high/40 pb-1.5">
             <span className="font-bold text-on-surface uppercase">Active AI Lock</span>
-            <span className={activeTarget ? 'text-error font-bold' : 'text-secondary font-bold'}>
-              {activeTarget ? 'TARGET LOCKED' : 'SEARCHING'}
-            </span>
+            {isOperator || isAdmin ? (
+              <span className={activeTarget ? 'text-error font-bold' : 'text-secondary font-bold'}>
+                {activeTarget ? 'TARGET LOCKED' : 'SEARCHING'}
+              </span>
+            ) : (
+              <span className="text-outline font-bold">[OPERATOR ONLY]</span>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-1 font-mono text-[11px] text-outline">
-            <span>Target:</span>
-            <span className="text-right text-primary font-bold">{activeTarget ? activeTarget.id : 'NONE'}</span>
-            <span>Confidence:</span>
-            <span className="text-right text-secondary font-bold">{activeTarget ? `${activeTarget.confidence}%` : '---'}</span>
-            <span>Boundary State:</span>
-            <span className={`text-right font-bold ${isFenceBreached ? 'text-error animate-pulse' : 'text-secondary'}`}>
-              {isFenceBreached ? 'TRIPWIRE BREACH' : 'SECURE'}
-            </span>
-          </div>
+          {isOperator || isAdmin ? (
+            <div className="grid grid-cols-2 gap-1 font-mono text-[11px] text-outline">
+              <span>Target:</span>
+              <span className="text-right text-primary font-bold">{activeTarget ? activeTarget.id : 'NONE'}</span>
+              <span>Confidence:</span>
+              <span className="text-right text-secondary font-bold">{activeTarget ? `${activeTarget.confidence}%` : '---'}</span>
+              <span>Boundary State:</span>
+              <span className={`text-right font-bold ${isFenceBreached ? 'text-error animate-pulse' : 'text-secondary'}`}>
+                {isFenceBreached ? 'TRIPWIRE BREACH' : 'SECURE'}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1 py-1 font-mono text-[11px] text-outline">
+              <span className="text-outline">Target Telemetry: <strong className="text-on-surface">CLASSIFIED</strong></span>
+              <span className="text-[10px] text-outline">Target tracking vector requires Operator clearance.</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

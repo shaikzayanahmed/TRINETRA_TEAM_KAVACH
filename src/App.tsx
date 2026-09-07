@@ -39,8 +39,22 @@ export const App: React.FC = () => {
               <Route path="/surveillance" element={<LiveSurveillancePage />} />
               <Route path="/map" element={<TacticalMapPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
-              <Route path="/targets" element={<TargetTrackingPage />} />
-              <Route path="/targets/:id" element={<TargetTrackingPage />} />
+              <Route
+                path="/targets"
+                element={
+                  <RbacGuard requiredRole="OPERATOR" fallbackTitle="TARGET INTELLIGENCE & TRACKING RESTRICTED" fallbackDescription="Target vector tracking, Kalman predictions, and optical telemetry are restricted to OPERATOR and ADMIN clearance levels.">
+                    <TargetTrackingPage />
+                  </RbacGuard>
+                }
+              />
+              <Route
+                path="/targets/:id"
+                element={
+                  <RbacGuard requiredRole="OPERATOR" fallbackTitle="TARGET INTELLIGENCE & TRACKING RESTRICTED" fallbackDescription="Target vector tracking, Kalman predictions, and optical telemetry are restricted to OPERATOR and ADMIN clearance levels.">
+                    <TargetTrackingPage />
+                  </RbacGuard>
+                }
+              />
               
               {/* Operator & Admin Authorized Modules */}
               <Route

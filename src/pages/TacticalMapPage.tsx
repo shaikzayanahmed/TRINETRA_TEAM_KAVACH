@@ -1,9 +1,11 @@
 import React from 'react';
 import { TacticalMapViewer } from '../components/map/TacticalMapViewer';
 import { useDemo } from '../context/DemoContext';
+import { useAuth } from '../context/AuthContext';
 
 export const TacticalMapPage: React.FC = () => {
   const { activeTarget, isFenceBreached, activeAlert } = useDemo();
+  const { isOperator, isAdmin } = useAuth();
 
   return (
     <div className="flex flex-col gap-4 select-none">
@@ -71,21 +73,33 @@ export const TacticalMapPage: React.FC = () => {
         </div>
 
         <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-col gap-2">
-          <span className="font-bold text-on-surface uppercase border-b border-surface-container-high/40 pb-1">
-            Active Threat Tracking
-          </span>
-          <div className="grid grid-cols-2 gap-1 text-[11px] text-outline">
-            <span>Active Target:</span>
-            <span className="text-right text-primary font-bold">{activeTarget ? activeTarget.id : 'NONE'}</span>
-            <span>Classification:</span>
-            <span className="text-right text-error font-bold">{activeTarget ? activeTarget.classification : 'NONE'}</span>
-            <span>Confidence:</span>
-            <span className="text-right text-secondary font-bold">{activeTarget ? `${activeTarget.confidence}%` : '---'}</span>
-            <span>Active Alert:</span>
-            <span className={`text-right font-bold ${activeAlert ? 'text-error' : 'text-secondary'}`}>
-              {activeAlert ? activeAlert.id : 'NO THREATS'}
+          <div className="flex items-center justify-between border-b border-surface-container-high/40 pb-1">
+            <span className="font-bold text-on-surface uppercase">
+              Active Threat Tracking
             </span>
+            {!(isOperator || isAdmin) && (
+              <span className="text-[10px] text-outline font-bold">[OPERATOR ONLY]</span>
+            )}
           </div>
+          {isOperator || isAdmin ? (
+            <div className="grid grid-cols-2 gap-1 text-[11px] text-outline">
+              <span>Active Target:</span>
+              <span className="text-right text-primary font-bold">{activeTarget ? activeTarget.id : 'NONE'}</span>
+              <span>Classification:</span>
+              <span className="text-right text-error font-bold">{activeTarget ? activeTarget.classification : 'NONE'}</span>
+              <span>Confidence:</span>
+              <span className="text-right text-secondary font-bold">{activeTarget ? `${activeTarget.confidence}%` : '---'}</span>
+              <span>Active Alert:</span>
+              <span className={`text-right font-bold ${activeAlert ? 'text-error' : 'text-secondary'}`}>
+                {activeAlert ? activeAlert.id : 'NO THREATS'}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1 py-1 text-[11px] text-outline">
+              <span>Target Vector: <strong className="text-on-surface">RESTRICTED</strong></span>
+              <span className="text-[10px]">Real-time tracking vector requires Operator clearance.</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
