@@ -13,30 +13,50 @@ interface NavItem {
 }
 
 export const Sidebar: React.FC = () => {
-  const { user, role, isAdmin, quickSwitchRole, logout } = useAuth();
+  const { user, role, isAdmin, isOperator, quickSwitchRole, logout } = useAuth();
   const { isFenceBreached, activeAlert } = useDemo();
   const [showRoleSwitcher, setShowRoleSwitcher] = useState<boolean>(false);
   const navigate = useNavigate();
 
   const navItems: NavItem[] = [
-    { name: 'Command Center', path: '/dashboard', icon: 'dashboard' },
-    { name: 'Live Surveillance', path: '/surveillance', icon: 'videocam', badge: '1 LIVE', badgeType: 'secondary' },
+    { name: 'Command Center', path: '/dashboard', icon: 'dashboard', requiredRole: 'VIEWER' },
+    { name: 'Live Surveillance', path: '/surveillance', icon: 'videocam', badge: '1 LIVE', badgeType: 'secondary', requiredRole: 'VIEWER' },
     {
-      name: 'Alerts',
+      name: 'Alerts & Intercept',
       path: '/alerts',
       icon: 'notifications_active',
       badge: isFenceBreached || activeAlert ? '1 CRIT' : undefined,
       badgeType: 'error',
+      requiredRole: 'OPERATOR',
     },
-    { name: 'Targets', path: '/targets', icon: 'person_search', badge: '1 ACT', badgeType: 'primary' },
-    { name: 'Tactical Map', path: '/map', icon: 'map' },
-    { name: 'Virtual Fence', path: '/virtual-fence', icon: 'fence', badge: isFenceBreached ? 'BREACH' : 'ACTIVE', badgeType: isFenceBreached ? 'error' : 'secondary' },
-    { name: 'Edge Node', path: '/edge-node', icon: 'router', badge: 'ONLINE', badgeType: 'secondary' },
-    { name: 'Evidence Vault', path: '/evidence', icon: 'fingerprint' },
-    { name: 'Environment', path: '/environment', icon: 'thermostat' },
-    { name: 'AI Analytics', path: '/analytics', icon: 'insights' },
-    { name: 'Data Flow', path: '/data-flow', icon: 'account_tree' },
-    { name: 'Reports & Audit', path: '/reports', icon: 'description' },
+    { name: 'Targets Tracking', path: '/targets', icon: 'person_search', badge: '1 ACT', badgeType: 'primary', requiredRole: 'VIEWER' },
+    { name: 'Tactical Map', path: '/map', icon: 'map', requiredRole: 'VIEWER' },
+    {
+      name: 'Virtual Fence',
+      path: '/virtual-fence',
+      icon: 'fence',
+      badge: isFenceBreached ? 'BREACH' : 'ACTIVE',
+      badgeType: isFenceBreached ? 'error' : 'secondary',
+      requiredRole: 'OPERATOR',
+    },
+    {
+      name: 'Edge Node Mgmt',
+      path: '/edge-node',
+      icon: 'router',
+      badge: 'ONLINE',
+      badgeType: 'secondary',
+      requiredRole: 'ADMIN',
+    },
+    { name: 'Evidence Vault', path: '/evidence', icon: 'fingerprint', requiredRole: 'VIEWER' },
+    { name: 'Environment', path: '/environment', icon: 'thermostat', requiredRole: 'VIEWER' },
+    { name: 'AI Analytics', path: '/analytics', icon: 'insights', requiredRole: 'VIEWER' },
+    {
+      name: 'Data Pipeline',
+      path: '/data-flow',
+      icon: 'account_tree',
+      requiredRole: 'ADMIN',
+    },
+    { name: 'Reports & Audit', path: '/reports', icon: 'description', requiredRole: 'VIEWER' },
   ];
 
   const handleLogout = () => {
@@ -56,6 +76,13 @@ export const Sidebar: React.FC = () => {
       default:
         return 'bg-primary/20 text-primary border-primary/40';
     }
+  };
+
+  const isRoleRestricted = (reqRole?: 'ADMIN' | 'OPERATOR' | 'VIEWER') => {
+    if (!reqRole || reqRole === 'VIEWER') return false;
+    if (reqRole === 'OPERATOR') return !isOperator;
+    if (reqRole === 'ADMIN') return !isAdmin;
+    return false;
   };
 
   return (
@@ -84,51 +111,73 @@ export const Sidebar: React.FC = () => {
         {/* Section Header */}
         <div className="flex items-center justify-between px-1 font-mono text-[10px] text-outline uppercase tracking-wider">
           <span>OPERATIONAL MODULES</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+          <div className="flex items-center gap-1.5">
+            <span className={`px-1 py-0.2 rounded text-[8px] font-bold border ${getRoleBadgeStyle()}`}>
+              {role}
+            </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+          </div>
         </div>
 
         {/* Navigation List */}
         <nav className="flex flex-col gap-1 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `px-3 py-2 rounded-lg font-mono text-xs uppercase tracking-wider font-semibold flex items-center justify-between transition-all ${
-                  isActive
-                    ? 'bg-surface-container-high text-primary border border-primary/40 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.6)]'
-                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/60 border border-transparent'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <div className="flex items-center gap-2.5">
-                    <span className={`material-symbols-outlined text-[18px] ${isActive ? 'text-primary' : 'text-outline'}`}>
-                      {item.icon}
-                    </span>
-                    <span>{item.name}</span>
-                  </div>
+          {navItems.map((item) => {
+            const isRestricted = isRoleRestricted(item.requiredRole);
 
-                  {item.badge ? (
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        item.badgeType === 'error'
-                          ? 'bg-error-container text-error border border-error/30 animate-pulse'
-                          : item.badgeType === 'secondary'
-                          ? 'bg-surface-container text-secondary border border-secondary/30'
-                          : 'bg-surface-container text-primary border border-primary/30'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  ) : isActive ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  ) : null}
-                </>
-              )}
-            </NavLink>
-          ))}
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `px-3 py-2 rounded-lg font-mono text-xs uppercase tracking-wider font-semibold flex items-center justify-between transition-all ${
+                    isActive
+                      ? 'bg-surface-container-high text-primary border border-primary/40 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.6)]'
+                      : isRestricted
+                      ? 'text-outline/60 hover:text-outline hover:bg-surface-container-highest/30 border border-transparent opacity-75'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/60 border border-transparent'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <div className="flex items-center gap-2.5">
+                      <span className={`material-symbols-outlined text-[18px] ${
+                        isActive
+                          ? 'text-primary'
+                          : isRestricted
+                          ? 'text-outline/50'
+                          : 'text-outline'
+                      }`}>
+                        {item.icon}
+                      </span>
+                      <span>{item.name}</span>
+                    </div>
+
+                    {isRestricted ? (
+                      <span className="px-1.5 py-0.2 rounded bg-surface-container text-[8px] font-bold text-outline border border-surface-container-highest flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[10px]">lock</span>
+                        <span>{item.requiredRole}</span>
+                      </span>
+                    ) : item.badge ? (
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          item.badgeType === 'error'
+                            ? 'bg-error-container text-error border border-error/30 animate-pulse'
+                            : item.badgeType === 'secondary'
+                            ? 'bg-surface-container text-secondary border border-secondary/30'
+                            : 'bg-surface-container text-primary border border-primary/30'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    ) : isActive ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    ) : null}
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
       </div>
 

@@ -3,6 +3,7 @@ import { Camera } from '../types';
 import { apiService } from '../services/apiService';
 import { CameraPanel } from '../components/camera/CameraPanel';
 import { useDemo } from '../context/DemoContext';
+import { useAuth } from '../context/AuthContext';
 
 type SurveillanceViewMode = 'SPLIT' | 'CAM-RGB-01' | 'CAM-LWIR-01';
 
@@ -13,6 +14,7 @@ export const LiveSurveillancePage: React.FC = () => {
   const [viewMode, setViewMode] = useState<SurveillanceViewMode>('SPLIT');
 
   const { activeTarget, isFenceBreached, startDemo, isRunning } = useDemo();
+  const { isOperator, isAdmin } = useAuth();
 
   useEffect(() => {
     const fetchCameras = async () => {
@@ -134,14 +136,21 @@ export const LiveSurveillancePage: React.FC = () => {
             ))}
           </div>
 
-          {!isRunning && (
-            <button
-              onClick={startDemo}
-              className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-              <span>TEST THREAT DETECTION</span>
-            </button>
+          {(isOperator || isAdmin) ? (
+            !isRunning && (
+              <button
+                onClick={startDemo}
+                className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.3)] flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                <span>TEST THREAT DETECTION</span>
+              </button>
+            )
+          ) : (
+            <div className="px-2.5 py-1 rounded-lg bg-surface-container border border-surface-container-high text-outline text-[11px] flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">visibility</span>
+              <span>LIVE MONITORING</span>
+            </div>
           )}
         </div>
       </div>

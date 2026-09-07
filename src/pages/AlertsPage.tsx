@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Alert } from '../types';
 import { apiService } from '../services/apiService';
 import { useDemo } from '../context/DemoContext';
+import { useAuth } from '../context/AuthContext';
 
 export const AlertsPage: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -11,6 +12,7 @@ export const AlertsPage: React.FC = () => {
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
 
   const { activeAlert } = useDemo();
+  const { isOperator, isAdmin } = useAuth();
 
   const fetchAlerts = async () => {
     const data = await apiService.getAlerts();
@@ -131,21 +133,30 @@ export const AlertsPage: React.FC = () => {
 
         {/* Quick Threat Generator & Bulk Actions */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-          <button
-            onClick={handleSimulateThreat}
-            className="px-3 py-1.5 rounded-lg bg-error text-on-error font-bold uppercase tracking-wider hover:bg-error/90 transition-all shadow-[0_0_12px_rgba(255,84,73,0.35)] flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[16px]">add_alert</span>
-            <span>SIMULATE THREAT</span>
-          </button>
+          {isOperator || isAdmin ? (
+            <>
+              <button
+                onClick={handleSimulateThreat}
+                className="px-3 py-1.5 rounded-lg bg-error text-on-error font-bold uppercase tracking-wider hover:bg-error/90 transition-all shadow-[0_0_12px_rgba(255,84,73,0.35)] flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">add_alert</span>
+                <span>SIMULATE THREAT</span>
+              </button>
 
-          <button
-            onClick={handleResolveAll}
-            className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-secondary border border-secondary/30 font-bold transition-colors flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[16px]">done_all</span>
-            <span>RESOLVE ALL</span>
-          </button>
+              <button
+                onClick={handleResolveAll}
+                className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-secondary border border-secondary/30 font-bold transition-colors flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">done_all</span>
+                <span>RESOLVE ALL</span>
+              </button>
+            </>
+          ) : (
+            <div className="px-3 py-1.5 rounded-lg bg-surface-container/60 border border-surface-container-high text-outline flex items-center gap-1.5 text-[11px]">
+              <span className="material-symbols-outlined text-[15px]">visibility</span>
+              <span>READ-ONLY SURVEILLANCE · OPERATOR PRIVILEGES REQUIRED TO DISPATCH</span>
+            </div>
+          )}
 
           <button
             onClick={handleExportAlerts}
@@ -364,13 +375,20 @@ export const AlertsPage: React.FC = () => {
                 </Link>
 
                 {selectedAlert.status !== 'RESOLVED' && (
-                  <button
-                    onClick={() => handleResolve(selectedAlert.id)}
-                    className="w-full py-2.5 rounded-lg bg-secondary text-on-secondary font-bold uppercase tracking-wider hover:bg-secondary/90 transition-all shadow-[0_0_12px_rgba(149,212,176,0.3)] flex items-center justify-center gap-1.5 mt-1"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                    <span>MARK THREAT RESOLVED</span>
-                  </button>
+                  isOperator || isAdmin ? (
+                    <button
+                      onClick={() => handleResolve(selectedAlert.id)}
+                      className="w-full py-2.5 rounded-lg bg-secondary text-on-secondary font-bold uppercase tracking-wider hover:bg-secondary/90 transition-all shadow-[0_0_12px_rgba(149,212,176,0.3)] flex items-center justify-center gap-1.5 mt-1"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                      <span>MARK THREAT RESOLVED</span>
+                    </button>
+                  ) : (
+                    <div className="w-full py-2 px-3 rounded-lg bg-surface-container-lowest border border-surface-container-high text-outline text-[11px] font-mono text-center flex items-center justify-center gap-1.5 mt-1">
+                      <span className="material-symbols-outlined text-[15px] text-outline">lock</span>
+                      <span>READ-ONLY · OPERATOR PRIVILEGE REQUIRED TO RESOLVE</span>
+                    </div>
+                  )
                 )}
               </div>
             </div>
