@@ -57,9 +57,10 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   // Live Vision AI Object Detection + ANPR Hook
   const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine, providerDescription } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !!videoSrc && isPlaying,
-    detectionIntervalMs: 60,
+    detectionIntervalMs: 80,
     filterMode,
     minConfidence: 0.35,
+    streamId: 'CAM-STREAM-02',
   });
 
   const oldBlobRef = useRef<string | null>(null);
@@ -69,6 +70,14 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {
+        // ignore
+      }
+    }
+    setIsPlaying(false);
     setIsLoading(true);
     setHasError(null);
     setSelectedFileName(file.name);

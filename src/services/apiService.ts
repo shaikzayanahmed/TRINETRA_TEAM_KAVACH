@@ -72,7 +72,14 @@ class ApiService {
   private saveStoredEvidence() {
     try {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('trinetra_evidence', JSON.stringify(this.evidence.slice(0, 50)));
+        const lightweightEvidence = this.evidence.slice(0, 20).map((item) => ({
+          ...item,
+          thumbnailUrl: undefined,
+          anprRecord: item.anprRecord
+            ? { ...item.anprRecord, plateCropUrl: undefined }
+            : undefined,
+        }));
+        localStorage.setItem('trinetra_evidence', JSON.stringify(lightweightEvidence));
       }
     } catch (e) {
       console.warn('Failed to save evidence to localStorage:', e);

@@ -8,6 +8,7 @@ export type DetectionFilterMode = 'MOVING_VEHICLES' | 'ALL_VEHICLES' | 'ALL_OBJE
 export interface DetectOptions {
   filterMode?: DetectionFilterMode;
   minConfidence?: number;
+  streamId?: string;
 }
 
 export interface LiveDetectionResult {
@@ -70,11 +71,18 @@ class VisionAiService {
   private isLoading: boolean = false;
   private isReady: boolean = false;
 
-  // Multi-Object Spatial Centroid Tracker State
-  private activeTracks: Map<string, ActiveTrack> = new Map();
+  // Multi-Camera Spatial Tracker States isolated per streamId
+  private streamTracks: Map<string, Map<string, ActiveTrack>> = new Map();
   private nextHumanId: number = 101;
   private nextVehicleId: number = 201;
   private nextEntityId: number = 301;
+
+  private getActiveTracks(streamId: string): Map<string, ActiveTrack> {
+    if (!this.streamTracks.has(streamId)) {
+      this.streamTracks.set(streamId, new Map());
+    }
+    return this.streamTracks.get(streamId)!;
+  }
 
   async loadModel(): Promise<boolean> {
     if (this.isReady && yoloService.isModelLoaded()) return true;
@@ -177,8 +185,8 @@ class VisionAiService {
   /**
    * Merge or prune any overlapping active tracks of the same classification
    */
-  private deduplicateActiveTracks() {
-    const trackList = Array.from(this.activeTracks.entries());
+  private deduplicateActiveTracks(activeTracks: Map<string, ActiveTrack>) {
+    const trackList = Array.from(activeTracks.entries());
     const toDelete = new Set<string>();
 
     for (let i = 0; i < trackList.length; i++) {
@@ -206,17 +214,17 @@ class VisionAiService {
     }
 
     for (const id of toDelete) {
-      this.activeTracks.delete(id);
+      activeTracks.delete(id);
     }
   }
 
   /**
    * Prune inactive tracks not seen in over 1.2 seconds or missed over 5 consecutive cycles
    */
-  private pruneInactiveTracks(now: number) {
-    for (const [id, track] of this.activeTracks.entries()) {
+  private pruneInactiveTracks(activeTracks: Map<string, ActiveTrack>, now: number) {
+    for (const [id, track] of activeTracks.entries()) {
       if (now - track.lastSeenMs > 1200 || track.missedFrames > 5) {
-        this.activeTracks.delete(id);
+        activeTracks.delete(id);
       }
     }
   }
@@ -233,7 +241,7 @@ class VisionAiService {
       return [];
     }
 
-    const { filterMode = 'MOVING_VEHICLES', minConfidence = 0.40 } = options;
+    const { filterMode = 'MOVING_VEHICLES', minConfidence = 0.40, streamId = 'DEFAULT_STREAM' } = options;
 
     const startTime = performance.now();
     const now = startTime;
@@ -249,8 +257,11 @@ class VisionAiService {
       // Clean up duplicate detections in current frame
       const cleanPredictions = this.filterRawPredictions(rawPredictions, srcWidth, srcHeight);
 
-      // Deduplicate active tracks
-      this.deduplicateActiveTracks();
+      // Get isolated tracks for this camera/stream
+      const activeTracks = this.getActiveTracks(streamId);
+
+      // Deduplicate active tracks for this stream
+      this.deduplicateActiveTracks(activeTracks);
 
       const matchedTrackIds = new Set<string>();
       const mappedResults: LiveDetectionResult[] = [];
@@ -321,7 +332,7 @@ class VisionAiService {
 
       for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
         const cand = candidates[cIdx];
-        for (const [trackId, track] of this.activeTracks.entries()) {
+        for (const [trackId, track] of activeTracks.entries()) {
           const isTrackVehicle = VEHICLE_CLASSES.has(track.class);
           const isCompatibleClass =
             track.class === cand.upperClass ||
@@ -350,7 +361,7 @@ class VisionAiService {
         matchedTrackIds.add(pair.trackId);
 
         const cand = candidates[pair.candidateIdx];
-        const existing = this.activeTracks.get(pair.trackId)!;
+        const existing = activeTracks.get(pair.trackId)!;
 
         existing.missedFrames = 0;
         existing.lastRawBbox = cand.rawBbox;
@@ -463,7 +474,7 @@ class VisionAiService {
 
         // Guard: Check if any active track is within proximity
         let isTooClose = false;
-        for (const track of this.activeTracks.values()) {
+        for (const track of activeTracks.values()) {
           const isSameClass = track.class === cand.upperClass || (cand.isVehicle && VEHICLE_CLASSES.has(track.class));
           if (isSameClass && Math.hypot(track.cx - cand.cx, track.cy - cand.cy) < 22) {
             isTooClose = true;
@@ -516,7 +527,7 @@ class VisionAiService {
           lastRawBbox: cand.rawBbox,
         };
 
-        this.activeTracks.set(newId, newTrack);
+        activeTracks.set(newId, newTrack);
         matchedTrackIds.add(newId);
 
         if (filterMode === 'MOVING_VEHICLES' && !cand.isVehicle) {
@@ -551,7 +562,7 @@ class VisionAiService {
       }
 
       // Track Hysteresis / Anti-Flicker: Coast established tracks ONLY if no other track is in that spot
-      for (const [trackId, track] of this.activeTracks.entries()) {
+      for (const [trackId, track] of activeTracks.entries()) {
         if (!matchedTrackIds.has(trackId)) {
           track.missedFrames += 1;
 
@@ -559,7 +570,7 @@ class VisionAiService {
             // Guard: Do not coast if a newly matched track is near this position
             let isClashing = false;
             for (const otherId of matchedTrackIds) {
-              const other = this.activeTracks.get(otherId);
+              const other = activeTracks.get(otherId);
               if (other && Math.hypot(other.cx - track.cx, other.cy - track.cy) < 20) {
                 isClashing = true;
                 break;
@@ -606,8 +617,8 @@ class VisionAiService {
         }
       }
 
-      // Clean up stale tracks
-      this.pruneInactiveTracks(now);
+      // Clean up stale tracks for this stream
+      this.pruneInactiveTracks(activeTracks, now);
 
       return mappedResults;
     } catch (err) {

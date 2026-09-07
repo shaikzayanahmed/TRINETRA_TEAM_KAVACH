@@ -25,6 +25,7 @@ export class YoloService {
   private session: ort.InferenceSession | null = null;
   private isLoading: boolean = false;
   private isReady: boolean = false;
+  private isInferring: boolean = false;
   private activeProvider: ExecutionProviderType = 'wasm';
   private providerDescription: string = 'CPU (WASM SIMD)';
   private readonly inputWidth: number = 640;
@@ -311,17 +312,20 @@ export class YoloService {
     confThreshold: number = 0.35
   ): Promise<YoloDetection[]> {
     if (
+      this.isInferring ||
       !this.session ||
       !video ||
       video.readyState < 2 ||
       video.videoWidth <= 0 ||
       video.videoHeight <= 0 ||
       video.seeking ||
-      video.ended
+      video.ended ||
+      video.paused
     ) {
       return [];
     }
 
+    this.isInferring = true;
     let inputTensor: ort.Tensor | null = null;
     let output: Record<string, ort.Tensor> | null = null;
 
@@ -347,6 +351,7 @@ export class YoloService {
       console.warn('YOLO inference error:', err);
       return [];
     } finally {
+      this.isInferring = false;
       // Release WebGPU / WebGL / WASM tensors to prevent OOM memory leaks and browser tab crashes
       try {
         if (inputTensor) {

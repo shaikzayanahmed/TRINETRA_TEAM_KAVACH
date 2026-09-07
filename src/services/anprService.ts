@@ -1,4 +1,3 @@
-import { createWorker, Worker } from 'tesseract.js';
 import { AnprRecord } from '../types';
 import { apiService } from './apiService';
 
@@ -48,26 +47,36 @@ const INDIAN_STATES: { [code: string]: string } = {
 const WATCHLIST_KEYWORDS = ['UNREG', 'SUSPICIOUS', 'STOLEN', 'WANTED', 'FLAGGED', 'BLOCKED'];
 
 class AnprService {
-  private worker: Worker | null = null;
-  private isInitializingWorker: boolean = false;
   private ocrCache: Map<string, AnprRecord> = new Map();
   private capturedSnapshotCache: Map<string, string> = new Map();
   private recordedEvidenceCache: Set<string> = new Set();
-  private pendingOcrJobs: Set<string> = new Set();
-  private offscreenCanvas: HTMLCanvasElement | null = null;
+  
+  // Reusable offscreen canvas instances to eliminate memory allocations and garbage collection pressure
+  private colorCanvas: HTMLCanvasElement | null = null;
+  private colorCtx: CanvasRenderingContext2D | null = null;
+  private snapCanvas: HTMLCanvasElement | null = null;
+  private snapCtx: CanvasRenderingContext2D | null = null;
 
   constructor() {
-    this.initWorker();
+    // Zero-allocation initialization
   }
 
   /**
-   * Estimates dominant vehicle paint color using accurate HSV colorimetry on real video pixels (<2ms)
+   * Estimates dominant vehicle paint color using accurate HSV colorimetry on real video pixels (<1ms)
    */
   public estimateVehicleColor(
     video?: HTMLVideoElement,
     rawBbox?: [number, number, number, number]
   ): string {
-    if (!video || !rawBbox || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
+    if (
+      !video ||
+      !rawBbox ||
+      video.readyState < 2 ||
+      video.videoWidth <= 0 ||
+      video.videoHeight <= 0 ||
+      video.seeking ||
+      video.ended
+    ) {
       return 'Steel Metallic Gray';
     }
 
@@ -84,14 +93,18 @@ class AnprService {
 
       if (sw <= 0 || sh <= 0) return 'Steel Metallic Gray';
 
-      const sampleCanvas = document.createElement('canvas');
-      sampleCanvas.width = 24;
-      sampleCanvas.height = 24;
-      const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+      if (!this.colorCanvas || !this.colorCtx) {
+        this.colorCanvas = document.createElement('canvas');
+        this.colorCanvas.width = 16;
+        this.colorCanvas.height = 16;
+        this.colorCtx = this.colorCanvas.getContext('2d', { willReadFrequently: true });
+      }
+
+      const ctx = this.colorCtx;
       if (!ctx) return 'Steel Metallic Gray';
 
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 24, 24);
-      const imgData = ctx.getImageData(0, 0, 24, 24);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 16, 16);
+      const imgData = ctx.getImageData(0, 0, 16, 16);
       const data = imgData.data;
 
       let totalH = 0, totalS = 0, totalV = 0;
@@ -148,33 +161,20 @@ class AnprService {
   }
 
   /**
-   * Lazy-initialize Tesseract.js WebAssembly OCR worker in background
-   */
-  private async initWorker() {
-    if (this.worker || this.isInitializingWorker) return;
-    this.isInitializingWorker = true;
-    try {
-      const worker = await createWorker('eng');
-      await worker.setParameters({
-        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-',
-        tessedit_pageseg_mode: '7' as any,
-      });
-      this.worker = worker;
-    } catch (err) {
-      console.warn('Tesseract OCR background initialization note:', err);
-    } finally {
-      this.isInitializingWorker = false;
-    }
-  }
-
-  /**
    * Extract real, optical snapshot of the vehicle number plate region from live video element
    */
   public captureCrispPlateSnapshot(
     video: HTMLVideoElement,
     rawBbox: [number, number, number, number]
   ): string {
-    if (!video || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
+    if (
+      !video ||
+      video.readyState < 2 ||
+      video.videoWidth <= 0 ||
+      video.videoHeight <= 0 ||
+      video.seeking ||
+      video.ended
+    ) {
       return '';
     }
 
@@ -190,77 +190,27 @@ class AnprService {
 
       if (cropW <= 0 || cropH <= 0) return '';
 
-      const snapCanvas = document.createElement('canvas');
-      snapCanvas.width = 320;
-      snapCanvas.height = 100;
-      const ctx = snapCanvas.getContext('2d', { willReadFrequently: true });
+      if (!this.snapCanvas || !this.snapCtx) {
+        this.snapCanvas = document.createElement('canvas');
+        this.snapCanvas.width = 160;
+        this.snapCanvas.height = 50;
+        this.snapCtx = this.snapCanvas.getContext('2d', { willReadFrequently: true });
+      }
+
+      const ctx = this.snapCtx;
       if (!ctx) return '';
 
-      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, 320, 100);
+      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, 160, 50);
 
       // Subtle reticle border
       ctx.strokeStyle = 'rgba(149, 212, 176, 0.4)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(1, 1, 318, 98);
+      ctx.strokeRect(1, 1, 158, 48);
 
-      return snapCanvas.toDataURL('image/jpeg', 0.90);
+      return this.snapCanvas.toDataURL('image/jpeg', 0.65);
     } catch {
       return '';
     }
-  }
-
-  /**
-   * Preprocess vehicle crop on offscreen canvas & enhance contrast for fast OCR
-   */
-  private preprocessPlateCrop(
-    video: HTMLVideoElement,
-    rawBbox: [number, number, number, number]
-  ): HTMLCanvasElement | null {
-    if (!this.offscreenCanvas) {
-      this.offscreenCanvas = document.createElement('canvas');
-    }
-
-    const [vx, vy, vw, vh] = rawBbox;
-    const cropX = Math.max(0, Math.floor(vx + vw * 0.10));
-    const cropY = Math.max(0, Math.floor(vy + vh * 0.40));
-    const cropW = Math.max(40, Math.floor(vw * 0.80));
-    const cropH = Math.max(20, Math.floor(vh * 0.55));
-
-    const targetWidth = 320;
-    const targetHeight = Math.max(80, Math.round((cropH / cropW) * 320));
-
-    this.offscreenCanvas.width = targetWidth;
-    this.offscreenCanvas.height = targetHeight;
-
-    const ctx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return null;
-
-    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, targetWidth, targetHeight);
-
-    try {
-      const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-      const data = imgData.data;
-
-      let totalLum = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        totalLum += lum;
-      }
-      const avgLum = totalLum / (data.length / 4);
-
-      for (let i = 0; i < data.length; i += 4) {
-        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        const val = lum > avgLum * 0.94 ? 255 : 0;
-        data[i] = val;
-        data[i + 1] = val;
-        data[i + 2] = val;
-      }
-      ctx.putImageData(imgData, 0, 0);
-    } catch {
-      // Continue if canvas tainted
-    }
-
-    return this.offscreenCanvas;
   }
 
   /**
@@ -284,6 +234,11 @@ class AnprService {
     if (!plateCropUrl && videoElement && rawBbox) {
       plateCropUrl = this.captureCrispPlateSnapshot(videoElement, rawBbox);
       if (plateCropUrl) {
+        // Enforce cache cap
+        if (this.capturedSnapshotCache.size > 30) {
+          const firstKey = this.capturedSnapshotCache.keys().next().value;
+          if (firstKey) this.capturedSnapshotCache.delete(firstKey);
+        }
         this.capturedSnapshotCache.set(targetId, plateCropUrl);
       }
     }
@@ -316,36 +271,25 @@ class AnprService {
       isAnalyzed: true,
     };
 
+    if (this.ocrCache.size > 50) {
+      const firstKey = this.ocrCache.keys().next().value;
+      if (firstKey) this.ocrCache.delete(firstKey);
+    }
     this.ocrCache.set(targetId, instantRecord);
 
     // Record once in Evidence Vault
     if (!this.recordedEvidenceCache.has(targetId)) {
       this.recordedEvidenceCache.add(targetId);
-      const ev = apiService.recordVehicleEvidence(instantRecord, targetId);
-      instantRecord.evidenceId = ev.id;
-    }
-
-    // Asynchronous refinement via Tesseract in background if available
-    if (videoElement && this.worker && !this.pendingOcrJobs.has(targetId) && videoElement.readyState >= 2) {
-      this.pendingOcrJobs.add(targetId);
-      setTimeout(async () => {
-        try {
-          const canvas = this.preprocessPlateCrop(videoElement, rawBbox);
-          if (canvas && this.worker) {
-            const result = await this.worker.recognize(canvas);
-            const text = (result.data.text || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
-            if (text.length >= 6) {
-              instantRecord.plateNumber = text;
-              instantRecord.confidence = Math.min(99.4, Math.max(88.0, Math.round((result.data.confidence || 90) * 10) / 10));
-              this.ocrCache.set(targetId, instantRecord);
-            }
-          }
-        } catch {
-          // Keep instant record
-        } finally {
-          this.pendingOcrJobs.delete(targetId);
-        }
-      }, 50);
+      if (this.recordedEvidenceCache.size > 100) {
+        const firstKey = this.recordedEvidenceCache.keys().next().value;
+        if (firstKey) this.recordedEvidenceCache.delete(firstKey);
+      }
+      try {
+        const ev = apiService.recordVehicleEvidence(instantRecord, targetId);
+        instantRecord.evidenceId = ev?.id;
+      } catch (err) {
+        console.warn('Evidence recording note:', err);
+      }
     }
 
     return instantRecord;

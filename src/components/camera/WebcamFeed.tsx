@@ -22,6 +22,8 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
   const { isModelReady, liveDetections, lastInferenceTimeMs, fps, activeEngine, providerDescription } = useLiveVision(videoRef, {
     enabled: showDetection && useLiveAi && !isDemoRunning,
     filterMode: 'ALL_OBJECTS',
+    streamId: 'CAM-RGB-01',
+    detectionIntervalMs: 80,
   });
 
   const startWebcam = async () => {
