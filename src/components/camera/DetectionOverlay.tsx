@@ -26,8 +26,7 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   };
 
   const classification = liveDetection?.class || target?.classification || 'PERSON';
-  const isHuman = ['PERSON', 'HUMAN'].includes(classification.toUpperCase());
-  const breachState = !isTripwireDisabled && isHuman && (Boolean(liveDetection?.isTripwireBreach) || Boolean(isBreached));
+  const breachState = !isTripwireDisabled && (Boolean(liveDetection?.isTripwireBreach) || Boolean(isBreached));
   const confidence = liveDetection?.score || target?.confidence || 96.8;
   const targetId = liveDetection?.id || target?.id || 'TGT-V201';
   const anpr = liveDetection?.anpr || target?.anpr;
@@ -36,7 +35,6 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
   const isMoving = liveDetection?.isMoving ?? (target?.speedKmh ? target.speedKmh > 5 : true);
   const speedKmh = liveDetection?.speedKmh || target?.speedKmh || (anpr?.speedKmh ?? 48);
   const bearingLabel = liveDetection?.bearingLabel || target?.bearing || anpr?.bearing || 'EASTBOUND';
-  const vehicleColor = anpr?.vehicleColor || 'Dark Obsidian';
 
   const isFlagged = Boolean(anpr?.isFlagged);
 
@@ -55,19 +53,6 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
     : isThermal
     ? 'bg-surface-container-lowest/95 text-tertiary border-tertiary/80'
     : 'bg-surface-container-lowest/95 text-primary border-primary/80';
-
-  const getColorDot = (colorName: string) => {
-    switch (colorName) {
-      case 'Silver White': return 'bg-slate-200 border-slate-400';
-      case 'Dark Obsidian': return 'bg-zinc-900 border-zinc-500';
-      case 'Tactical Olive Green': return 'bg-emerald-600 border-emerald-400';
-      case 'Crimson Red': return 'bg-rose-500 border-rose-300';
-      case 'Navy Blue': return 'bg-blue-500 border-blue-300';
-      case 'Steel Metallic Gray': return 'bg-slate-400 border-slate-300';
-      case 'Desert Sand': return 'bg-amber-400 border-amber-200';
-      default: return 'bg-secondary border-secondary';
-    }
-  };
 
   return (
     <div
@@ -90,6 +75,11 @@ export const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
             <span className="font-semibold uppercase tracking-wider">{classification}</span>
             <span className="text-outline">·</span>
             <span className="font-semibold">{Math.round(confidence)}%</span>
+            {breachState && (
+              <span className="ml-1 px-1 py-0.2 rounded bg-error text-on-error font-bold text-[8px] animate-pulse">
+                PERIMETER BREACH
+              </span>
+            )}
             {isFlagged && (
               <span className="ml-1 px-1 py-0.2 rounded bg-error text-on-error font-bold text-[8px] animate-pulse">
                 FLAGGED

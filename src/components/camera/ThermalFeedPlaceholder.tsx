@@ -28,16 +28,45 @@ export const ThermalFeedPlaceholder: React.FC<ThermalFeedPlaceholderProps> = ({ 
           </p>
         </div>
 
-        {/* Action Button to Activate Custom Feed */}
-        {onSelectStream && (
-          <button
-            onClick={onSelectStream}
-            className="mt-1 px-3.5 py-2 rounded-xl bg-tertiary text-on-tertiary font-mono text-xs font-bold uppercase tracking-wider hover:bg-tertiary/90 transition-all shadow-[0_0_12px_rgba(255,183,125,0.25)] flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-base">video_library</span>
-            <span>SELECT VIDEO / VLC STREAM FEED</span>
-          </button>
-        )}
+        {/* Action Buttons to Activate Custom Feed or Upload Video */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+          {onSelectStream && (
+            <button
+              onClick={onSelectStream}
+              className="px-3.5 py-2 rounded-xl bg-tertiary text-on-tertiary font-mono text-xs font-bold uppercase tracking-wider hover:bg-tertiary/90 transition-all shadow-[0_0_12px_rgba(255,183,125,0.25)] flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-base">podcasts</span>
+              <span>VLC STREAM / URL</span>
+            </button>
+          )}
+
+          <label className="px-3.5 py-2 rounded-xl bg-primary text-on-primary font-mono text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_0_12px_rgba(173,198,255,0.25)] flex items-center gap-2 cursor-pointer">
+            <span className="material-symbols-outlined text-base">upload_file</span>
+            <span>UPLOAD VIDEO FILE</span>
+            <input
+              type="file"
+              accept="video/mp4,video/webm,video/ogg,video/quicktime,video/mkv,.mp4,.webm,.mov,.mkv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                import('../../services/globalMediaStreamService').then(({ globalMediaStreamService }) => {
+                  globalMediaStreamService.setActiveMedia({
+                    videoSrc: url,
+                    fileName: file.name,
+                    isPlaying: true,
+                    currentTime: 0,
+                    isLooping: true,
+                    spectralFilter: 'OPTICAL',
+                    filterMode: 'MOVING_VEHICLES',
+                  });
+                  if (onSelectStream) onSelectStream();
+                });
+              }}
+            />
+          </label>
+        </div>
 
         {/* Integration Ready Badge */}
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container border border-surface-container-high font-mono text-[10px] text-on-surface-variant">

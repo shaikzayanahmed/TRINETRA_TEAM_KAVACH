@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { videoClipService } from './videoClipService';
 import { evidenceStorageService } from './evidenceStorageService';
+import { anprService } from './anprService';
 
 const BACKEND_BASE_URL = 'http://127.0.0.1:8000/api';
 
@@ -47,6 +48,7 @@ export const DEFAULT_CAMERAS: Camera[] = [
 export const DEFAULT_EDGE_NODE: EdgeNode = {
   id: 'EDGE-NODE-01',
   name: 'Trinetra Edge Inference Unit Alpha',
+  sector: 'Northern Border Sector 07',
   status: 'ONLINE',
   ipAddress: '192.168.1.108',
   macAddress: '00:1A:2B:3C:4D:5E',
@@ -595,7 +597,7 @@ class ApiService {
     this.activeFenceId = fenceData.id;
     const targetSource = fenceData.sourceTarget || 'CAM-RGB-01';
     this.cameraActiveFenceMap[targetSource] = fenceData.id;
-    if (targetSource === 'MEDIA_FILE' || targetSource === 'CAM-LWIR-01' || targetSource === 'CAM-STREAM-02') {
+    if (targetSource === 'MEDIA_FILE' || targetSource === 'CAM-LWIR-01' || (targetSource as string) === 'CAM-STREAM-02') {
       this.cameraActiveFenceMap['MEDIA_FILE'] = fenceData.id;
       this.cameraActiveFenceMap['CAM-LWIR-01'] = fenceData.id;
       this.cameraActiveFenceMap['CAM-STREAM-02'] = fenceData.id;
@@ -1163,13 +1165,16 @@ class ApiService {
   // Automatic Breach Alert + Single-Alert Aggregation with Timeline Tag + Video Clip DB Storage
   public recordBreachEvidenceAndAlert(breachData?: {
     targetId?: string;
+    targetClassification?: 'VEHICLE' | 'PERSON';
     cameraId?: string;
     zoneName?: string;
     confidence?: number;
     snapshotBase64?: string;
     videoElement?: HTMLVideoElement | null;
+    rawBbox?: [number, number, number, number];
+    anprRecord?: any;
   }): { alert: Alert; evidence: Evidence } {
-    const activeFence = this.getActiveFenceSync();
+    const activeFence = this.getActiveFenceSync(breachData?.cameraId);
     const fenceId = activeFence.id;
     const fenceName = activeFence.name;
     const fenceType = activeFence.type || 'POLYGON';
@@ -1333,15 +1338,38 @@ class ApiService {
         snapshotUrl: finalSnapshot,
       };
 
+      const isVehicleTarget = targetId.startsWith('TGT-V') || (breachData as any)?.targetClassification === 'VEHICLE';
+      let vehiclePlate: string | undefined;
+      let vehicleColor: string | undefined;
+      let vehicleType: string | undefined;
+      let vehiclePlateCrop: string | undefined;
+      let vehicleAnpr: any = undefined;
+
+      if (isVehicleTarget) {
+        const anpr = breachData?.anprRecord || anprService.recognizePlate(
+          targetId,
+          'VEHICLE',
+          breachData?.rawBbox || [120, 100, 300, 180],
+          breachData?.videoElement || undefined
+        );
+        vehiclePlate = anpr.plateNumber;
+        vehicleColor = anpr.vehicleColor || 'Silver White';
+        vehicleType = anpr.vehicleType || 'SUV';
+        vehiclePlateCrop = anpr.plateCropUrl;
+        vehicleAnpr = anpr;
+      }
+
       const newAlert: Alert = {
         id: alertId,
-        title: `VIRTUAL FENCE BREACH [${fenceName}]`,
-        description: `Target crossed active perimeter boundary [${fenceName} (${fenceType})]. Forensic video clip & SHA-256 seal stored in database.`,
+        title: isVehicleTarget ? `VEHICLE PERIMETER BREACH [${vehiclePlate || fenceName}]` : `VIRTUAL FENCE BREACH [${fenceName}]`,
+        description: isVehicleTarget
+          ? `Vehicle with license plate [${vehiclePlate}] crossed active perimeter boundary [${fenceName}]. Plate capture stored in encrypted evidence vault.`
+          : `Target crossed active perimeter boundary [${fenceName} (${fenceType})]. Forensic video clip & SHA-256 seal stored in database.`,
         type: 'VIRTUAL_FENCE_BREACH',
         severity: 'CRITICAL',
         status: 'NEW',
         targetId,
-        targetClassification: 'PERSON',
+        targetClassification: isVehicleTarget ? 'VEHICLE' : 'PERSON',
         confidence,
         cameraId,
         zone: zoneName,
@@ -1358,6 +1386,11 @@ class ApiService {
         timeline: [initialTimelineEvent],
         evidenceId,
         thumbnailUrl: finalSnapshot,
+        plateNumber: vehiclePlate,
+        plateCropUrl: vehiclePlateCrop,
+        vehicleColor,
+        vehicleType,
+        anprRecord: vehicleAnpr,
         databaseStored: true,
         videoDurationSeconds: 4,
         sha256Hash: sha256,
@@ -1406,6 +1439,25 @@ class ApiService {
         summaryNarration: `Target [${targetId}] breached active boundary [${fenceName}]. Subject estimated height ~178cm (±3cm), wearing full-face balaclava, dark hooded parka, black cargo trousers, and carrying a tactical rucksack with suspicious metallic tool payload. Posture: deliberate tactical crouch.`,
       };
 
+      const vehicleForensics = {
+        subjectType: 'VEHICLE' as const,
+        vehicle: {
+          brand: vehicleType === 'SUV' ? 'Toyota' : (vehicleType === 'TRUCK' ? 'Tata Motors' : 'Hyundai'),
+          model: vehicleType === 'SUV' ? 'Fortuner / Scorpio' : (vehicleType === 'TRUCK' ? 'Signa Freight Carrier' : 'Verna / City'),
+          bodyType: (vehicleType === 'SUV' ? 'SUV' : (vehicleType === 'TRUCK' ? 'TRUCK' : 'SEDAN')) as any,
+          color: vehicleColor || 'Silver White',
+          distinguishingFeatures: ['Reflective High-Security Registration Plate', 'Front Bumper Crash Guard'],
+          tintedGlassPercent: 35,
+          occupantCountEstimated: 2,
+          anprMatchConfidence: confidence,
+        },
+        aiModelEngine: 'YOLOv8-VehicleAttr-v2 + OCR-CRNN-LPR',
+        inferenceFps: 30.0,
+        lightingCondition: 'DAYLIGHT' as const,
+        threatLevelAssessment: 'CRITICAL_SUSPECT' as const,
+        summaryNarration: `Target vehicle [${targetId}] breached active perimeter [${fenceName}]. License plate [${vehiclePlate}] extracted via multi-frame optical OCR and sealed with SHA-256 evidence certificate. Color: ${vehicleColor}, Classification: ${vehicleType}.`,
+      };
+
       const newEvidence: Evidence = {
         id: evidenceId,
         alertId,
@@ -1422,9 +1474,14 @@ class ApiService {
         fileSizeKb: 3450,
         durationSeconds: 4,
         thumbnailUrl: finalSnapshot,
+        plateNumber: vehiclePlate,
+        plateCropUrl: vehiclePlateCrop,
+        vehicleColor,
+        vehicleType,
+        anprRecord: vehicleAnpr,
         timeline: [initialTimelineEvent],
         databaseStored: true,
-        forensics: personForensics,
+        forensics: isVehicleTarget ? vehicleForensics : personForensics,
       };
 
       // Generate & store short video clip in database with preset points

@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useLiveVision } from '../../hooks/useLiveVision';
 import { DetectionFilterMode } from '../../services/visionAiService';
+import { globalMediaStreamService } from '../../services/globalMediaStreamService';
 import { DetectionOverlay } from './DetectionOverlay';
 import { VirtualFenceOverlay } from './VirtualFenceOverlay';
 
@@ -9,7 +10,7 @@ interface VideoStreamFeedProps {
   onCloseStream?: () => void;
 }
 
-type SpectralFilter = 'OPTICAL' | 'FLIR_IRONBOW' | 'WHITE_HOT' | 'GREEN_NVG';
+type SpectralFilter = 'OPTICAL' | 'FLIR_IRONBOW' | 'WHITE_HOT' | 'GREEN_NVG' | 'THERMAL_CAMO';
 
 const DEMO_PRESETS = [
   {
@@ -39,16 +40,22 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [videoSrc, setVideoSrc] = useState<string>('');
+  const initialMedia = globalMediaStreamService.getActiveMedia();
+
+  const [videoSrc, setVideoSrc] = useState<string>(initialMedia?.videoSrc || '');
   const [streamUrlInput, setStreamUrlInput] = useState<string>('http://localhost:8080');
-  const [selectedFileName, setSelectedFileName] = useState<string>('');
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [selectedFileName, setSelectedFileName] = useState<string>(initialMedia?.fileName || '');
+  const [isPlaying, setIsPlaying] = useState<boolean>(initialMedia?.isPlaying ?? false);
   const [isMuted, setIsMuted] = useState<boolean>(true);
-  const [isLooping, setIsLooping] = useState<boolean>(true);
-  const [playbackRate, setPlaybackRate] = useState<number>(1);
-  const [spectralFilter, setSpectralFilter] = useState<SpectralFilter>('OPTICAL');
+  const [isLooping, setIsLooping] = useState<boolean>(initialMedia?.isLooping ?? true);
+  const [playbackRate, setPlaybackRate] = useState<number>(initialMedia?.playbackRate || 1);
+  const [spectralFilter, setSpectralFilter] = useState<SpectralFilter>(
+    (initialMedia?.spectralFilter as SpectralFilter) || 'OPTICAL'
+  );
   const [useLiveAi, setUseLiveAi] = useState<boolean>(true);
-  const [filterMode, setFilterMode] = useState<DetectionFilterMode>('ALL_OBJECTS');
+  const [filterMode, setFilterMode] = useState<DetectionFilterMode>(
+    (initialMedia?.filterMode as DetectionFilterMode) || 'ALL_OBJECTS'
+  );
   const [showVlcGuide, setShowVlcGuide] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -65,6 +72,19 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   });
 
   const oldBlobRef = useRef<string | null>(null);
+
+  // Listen for media configuration updates across components
+  useEffect(() => {
+    const unsubscribe = globalMediaStreamService.subscribeMedia((media) => {
+      if (media && media.videoSrc !== videoSrc) {
+        setVideoSrc(media.videoSrc);
+        setSelectedFileName(media.fileName);
+        if (media.spectralFilter) setSpectralFilter(media.spectralFilter as SpectralFilter);
+        if (media.filterMode) setFilterMode(media.filterMode as DetectionFilterMode);
+      }
+    });
+    return () => unsubscribe();
+  }, [videoSrc]);
 
   // Handle local video file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,6 +109,16 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
 
     const objectUrl = URL.createObjectURL(file);
     setVideoSrc(objectUrl);
+
+    // Save to global persistent service
+    globalMediaStreamService.setActiveMedia({
+      videoSrc: objectUrl,
+      fileName: file.name,
+      spectralFilter,
+      filterMode,
+      isLooping: true,
+      isPlaying: true,
+    });
   };
 
   // Handle URL stream connection
@@ -98,26 +128,50 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
 
     setIsLoading(true);
     setHasError(null);
-    setSelectedFileName(targetUrl.split('/').pop() || 'Network Stream');
+    const fname = targetUrl.split('/').pop() || 'Network Stream';
+    setSelectedFileName(fname);
 
     if (videoSrc && videoSrc.startsWith('blob:')) {
       oldBlobRef.current = videoSrc;
     }
 
     setVideoSrc(targetUrl);
+
+    // Save to global persistent service
+    globalMediaStreamService.setActiveMedia({
+      videoSrc: targetUrl,
+      fileName: fname,
+      spectralFilter,
+      filterMode,
+      isLooping: true,
+      isPlaying: true,
+    });
+  };
+
+  const handleCloseStream = () => {
+    globalMediaStreamService.clearActiveMedia();
+    setVideoSrc('');
+    setSelectedFileName('');
+    if (onCloseStream) {
+      onCloseStream();
+    }
   };
 
   // Play / Pause toggle
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
-      videoRef.current.play().then(() => setIsPlaying(true)).catch((err) => {
+      videoRef.current.play().then(() => {
+        setIsPlaying(true);
+        globalMediaStreamService.updateMediaPlayback({ isPlaying: true });
+      }).catch((err) => {
         console.warn('Playback error:', err);
         setHasError('Unable to autoplay: Please click Play or check video format/CORS.');
       });
     } else {
       videoRef.current.pause();
       setIsPlaying(false);
+      globalMediaStreamService.updateMediaPlayback({ isPlaying: false });
     }
   };
 
@@ -133,6 +187,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
   const onTimeUpdate = () => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
+      globalMediaStreamService.updateMediaPlayback({ currentTime: videoRef.current.currentTime });
     }
   };
 
@@ -188,6 +243,10 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
       case 'GREEN_NVG':
         return {
           filter: 'sepia(100%) hue-rotate(85deg) saturate(4.0) contrast(1.5) brightness(0.9)',
+        };
+      case 'THERMAL_CAMO':
+        return {
+          filter: 'hue-rotate(180deg) invert(75%) contrast(2.4) brightness(0.9) saturate(2.8)',
         };
       default:
         return {
@@ -262,6 +321,7 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
             <VirtualFenceOverlay
               cameraId="CAM-LWIR-01"
               isThermal={spectralFilter !== 'OPTICAL'}
+              isDirectlyBreached={liveDetections.some((d) => d.isTripwireBreach)}
             />
           )}
 
@@ -433,11 +493,11 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
 
             {/* Spectral Filter Switcher */}
             <div className="flex items-center gap-1 bg-black/60 backdrop-blur rounded p-0.5 border border-white/20 text-[10px]">
-              {(['OPTICAL', 'FLIR_IRONBOW', 'WHITE_HOT', 'GREEN_NVG'] as const).map((filter) => (
+              {(['OPTICAL', 'FLIR_IRONBOW', 'WHITE_HOT', 'GREEN_NVG', 'THERMAL_CAMO'] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setSpectralFilter(filter)}
-                  title={`Switch to ${filter}`}
+                  title={`Switch to ${filter.replace('_', ' ')}`}
                   className={`px-1.5 py-0.5 rounded font-semibold transition-colors ${
                     spectralFilter === filter
                       ? 'bg-tertiary text-black font-bold'
@@ -450,7 +510,9 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
                     ? 'FLIR'
                     : filter === 'WHITE_HOT'
                     ? 'W-HOT'
-                    : 'NVG'}
+                    : filter === 'GREEN_NVG'
+                    ? 'NVG'
+                    : 'CAMO'}
                 </button>
               ))}
             </div>
@@ -481,15 +543,13 @@ export const VideoStreamFeed: React.FC<VideoStreamFeedProps> = ({
             </button>
 
             {/* Reset / Close Stream */}
-            {onCloseStream && (
-              <button
-                onClick={onCloseStream}
-                title="Return to Standby"
-                className="p-1 rounded bg-black/60 hover:bg-error/80 border border-white/20 text-white/80 hover:text-white"
-              >
-                <span className="material-symbols-outlined text-sm">close</span>
-              </button>
-            )}
+            <button
+              onClick={handleCloseStream}
+              title="Return to Standby"
+              className="p-1 rounded bg-black/60 hover:bg-error/80 border border-white/20 text-white/80 hover:text-white"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
           </div>
         </div>
       )}

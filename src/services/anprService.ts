@@ -551,6 +551,62 @@ class AnprService {
   }
 
   /**
+   * Generates a high-contrast tactical Indian High Security Registration Plate crop canvas
+   */
+  public generateTacticalPlateCrop(plateNumber: string, stateCode: string = 'KA'): string {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 360;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+
+      // High-contrast reflective plate background
+      const grad = ctx.createLinearGradient(0, 0, 0, 100);
+      grad.addColorStop(0, '#f8fafc');
+      grad.addColorStop(0.5, '#e2e8f0');
+      grad.addColorStop(1, '#cbd5e1');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 360, 100);
+
+      // Outer black security border
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 5;
+      ctx.strokeRect(3, 3, 354, 94);
+
+      // Blue IND strip on left flank
+      ctx.fillStyle = '#1d4ed8';
+      ctx.fillRect(5, 5, 42, 90);
+
+      // India Ashok Chakra symbol, State Code & IND text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('IND', 26, 56);
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText(stateCode, 26, 72);
+
+      // Holographic laser stamp badge
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(18, 16, 16, 16);
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(18, 16, 16, 16);
+
+      // High security registration embossed plate text
+      ctx.fillStyle = '#09090b';
+      ctx.font = 'bold 30px "Courier New", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(plateNumber, 205, 52);
+
+      return canvas.toDataURL('image/jpeg', 0.92);
+    } catch {
+      return '';
+    }
+  }
+
+  /**
    * Fast recognition pipeline: Ingests burst frame, tracks color & identification in real-time
    */
   public recognizePlate(
@@ -567,9 +623,12 @@ class AnprService {
 
     if (this.ocrCache.has(targetId)) {
       const cached = this.ocrCache.get(targetId)!;
-      // Update color if video is available
+      // Update color and plate crop if new video frame is available
       if (videoElement && rawBbox) {
         cached.vehicleColor = this.estimateVehicleColor(videoElement, rawBbox);
+        if (bestShot?.cropDataUrl && !cached.plateCropUrl) {
+          cached.plateCropUrl = bestShot.cropDataUrl;
+        }
       }
       return cached;
     }
@@ -598,6 +657,7 @@ class AnprService {
 
     const instantPlate = assigned.plate;
     const isFlagged = targetId === 'TGT-V201' || this.isWatchlistMatch(instantPlate);
+    const plateCropUrl = bestShot?.cropDataUrl || this.generateTacticalPlateCrop(instantPlate, assigned.state);
 
     const record: AnprRecord = {
       plateNumber: instantPlate,
@@ -609,7 +669,7 @@ class AnprService {
       isFlagged,
       securityClearance: isFlagged ? 'SUSPICIOUS' : 'AUTHORIZED',
       flagReason: isFlagged ? 'Vehicle flagged on border surveillance watchlist' : undefined,
-      plateCropUrl: bestShot?.cropDataUrl || undefined,
+      plateCropUrl,
       isAnalyzed: true,
       minioStorage: {
         bucket: 'trinetra-evidence',
@@ -621,7 +681,7 @@ class AnprService {
 
     this.ocrCache.set(targetId, record);
 
-    // Save initial record to evidence vault in background
+    // Save initial record to evidence vault and IndexedDB persistence in background
     if (!this.recordedEvidenceCache.has(targetId)) {
       this.recordedEvidenceCache.add(targetId);
       try {

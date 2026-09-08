@@ -67,7 +67,7 @@ export const VirtualFencePage: React.FC = () => {
   const [mediaMuted, setMediaMuted] = useState<boolean>(true);
   const [mediaLoop, setMediaLoop] = useState<boolean>(true);
   const [mediaSpeed, setMediaSpeed] = useState<number>(1.0);
-  const [mediaSpectralFilter, setMediaSpectralFilter] = useState<'OPTICAL' | 'FLIR_IRONBOW' | 'WHITE_HOT' | 'GREEN_NVG'>('OPTICAL');
+  const [mediaSpectralFilter, setMediaSpectralFilter] = useState<'OPTICAL' | 'FLIR_IRONBOW' | 'WHITE_HOT' | 'GREEN_NVG' | 'THERMAL_CAMO'>('OPTICAL');
   const [showMediaAi, setShowMediaAi] = useState<boolean>(true);
 
   const mediaVideoRef = useRef<HTMLVideoElement>(null);
@@ -251,6 +251,8 @@ export const VirtualFencePage: React.FC = () => {
         return { filter: 'grayscale(100%) invert(85%) contrast(2.2) brightness(0.85)' };
       case 'GREEN_NVG':
         return { filter: 'sepia(100%) hue-rotate(85deg) saturate(4.0) contrast(1.5) brightness(0.9)' };
+      case 'THERMAL_CAMO':
+        return { filter: 'hue-rotate(180deg) invert(75%) contrast(2.4) brightness(0.9) saturate(2.8)' };
       default:
         return {};
     }
@@ -644,17 +646,31 @@ export const VirtualFencePage: React.FC = () => {
             </button>
 
             {/* Media Upload / Video Stream Option */}
-            <button
-              onClick={() => handleSwitchSourceTarget('MEDIA_FILE')}
-              className={`px-3 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-2 ${
-                sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01'
-                  ? 'bg-tertiary text-on-tertiary font-bold shadow-md'
-                  : 'text-outline hover:text-tertiary'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">movie</span>
-              <span>🎬 MEDIA UPLOAD / RECORDED VIDEO</span>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleSwitchSourceTarget('MEDIA_FILE')}
+                className={`px-3 py-1.5 rounded-lg transition-all font-semibold flex items-center gap-2 ${
+                  sourceTarget === 'MEDIA_FILE' || sourceTarget === 'CAM-LWIR-01'
+                    ? 'bg-tertiary text-on-tertiary font-bold shadow-md'
+                    : 'text-outline hover:text-tertiary'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">movie</span>
+                <span>🎬 MEDIA STREAM</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  handleSwitchSourceTarget('MEDIA_FILE');
+                  fileInputRef.current?.click();
+                }}
+                title="Upload Local MP4 / WebM / MKV Video File"
+                className="px-2.5 py-1.5 rounded-lg bg-tertiary/20 hover:bg-tertiary text-tertiary hover:text-on-tertiary border border-tertiary/40 text-[11px] font-bold flex items-center gap-1 transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[14px]">upload_file</span>
+                <span>UPLOAD FILE</span>
+              </button>
+            </div>
 
             {/* Tactical GIS Map Option */}
             <button
@@ -1070,6 +1086,16 @@ export const VirtualFencePage: React.FC = () => {
                       FLIR
                     </button>
                     <button
+                      onClick={() => setMediaSpectralFilter('WHITE_HOT')}
+                      className={`px-2 py-1 rounded transition-colors ${
+                        mediaSpectralFilter === 'WHITE_HOT'
+                          ? 'bg-white text-black font-bold'
+                          : 'text-outline hover:text-on-surface'
+                      }`}
+                    >
+                      W-HOT
+                    </button>
+                    <button
                       onClick={() => setMediaSpectralFilter('GREEN_NVG')}
                       className={`px-2 py-1 rounded transition-colors ${
                         mediaSpectralFilter === 'GREEN_NVG'
@@ -1078,6 +1104,17 @@ export const VirtualFencePage: React.FC = () => {
                       }`}
                     >
                       NVG
+                    </button>
+                    <button
+                      onClick={() => setMediaSpectralFilter('THERMAL_CAMO')}
+                      title="Thermal Camouflage Defeat Filter"
+                      className={`px-2 py-1 rounded transition-colors ${
+                        mediaSpectralFilter === 'THERMAL_CAMO'
+                          ? 'bg-tertiary text-black font-bold shadow-sm'
+                          : 'text-outline hover:text-tertiary'
+                      }`}
+                    >
+                      CAMO
                     </button>
                   </div>
                 </div>

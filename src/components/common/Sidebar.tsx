@@ -133,7 +133,7 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Navigation List */}
-        <nav className="flex flex-col gap-1 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
+        <nav className="flex flex-col gap-1 max-h-[calc(100vh-340px)] overflow-y-auto pr-1">
           {navItems.map((item) => {
             const isRestricted = isRoleRestricted(item.requiredRole);
 
@@ -142,21 +142,21 @@ export const Sidebar: React.FC = () => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `px-3 py-2 rounded-lg font-mono text-xs uppercase tracking-wider font-semibold flex items-center justify-between transition-all ${
+                  `relative px-3 py-2 rounded-lg font-mono text-xs uppercase tracking-wider font-semibold flex items-center justify-between transition-all duration-150 ${
                     isActive
-                      ? 'bg-surface-container-high text-primary border border-primary/40 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.6)]'
+                      ? 'bg-surface-container-high text-primary border border-primary/50 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.6),0_0_12px_rgba(173,198,255,0.15)] before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-primary before:rounded-r before:shadow-[0_0_8px_rgba(173,198,255,0.8)]'
                       : isRestricted
                       ? 'text-outline/60 hover:text-outline hover:bg-surface-container-highest/30 border border-transparent opacity-75'
-                      : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/60 border border-transparent'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/60 border border-transparent hover:translate-x-0.5'
                   }`
                 }
               >
                 {({ isActive }) => (
                   <>
                     <div className="flex items-center gap-2.5">
-                      <span className={`material-symbols-outlined text-[18px] ${
+                      <span className={`material-symbols-outlined text-[18px] transition-transform ${
                         isActive
-                          ? 'text-primary'
+                          ? 'text-primary scale-110'
                           : isRestricted
                           ? 'text-outline/50'
                           : 'text-outline'
@@ -173,12 +173,12 @@ export const Sidebar: React.FC = () => {
                       </span>
                     ) : item.badge ? (
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm ${
                           item.badgeType === 'error'
-                            ? 'bg-error-container text-error border border-error/30 animate-pulse'
+                            ? 'bg-error-container text-error border border-error/40 shadow-[0_0_8px_rgba(255,180,171,0.3)] animate-pulse'
                             : item.badgeType === 'secondary'
-                            ? 'bg-surface-container text-secondary border border-secondary/30'
-                            : 'bg-surface-container text-primary border border-primary/30'
+                            ? 'bg-surface-container text-secondary border border-secondary/40'
+                            : 'bg-surface-container text-primary border border-primary/40'
                         }`}
                       >
                         {item.badge}
@@ -192,10 +192,26 @@ export const Sidebar: React.FC = () => {
             );
           })}
         </nav>
+
+        {/* Quick Launch KAVACH BOT Assistant Button */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('open-ai-command-palette'))}
+          className="w-full p-2.5 rounded-lg bg-surface-container-lowest hover:bg-surface-container border border-primary/40 hover:border-primary/80 text-primary font-mono text-[11px] font-bold flex items-center justify-between transition-all shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] group tactical-glow-hover cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-primary group-hover:scale-110 transition-transform">
+              smart_toy
+            </span>
+            <span className="tracking-wider">KAVACH BOT</span>
+          </div>
+          <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high border border-surface-container-highest text-[9px] text-primary font-bold">
+            Ctrl+K
+          </kbd>
+        </button>
       </div>
 
       {/* Footer Profile with Interactive Toggle Pop-up */}
-      <div ref={userMenuRef} className="relative flex flex-col gap-2 pt-3 border-t border-surface-container-high/50 mt-3">
+      <div ref={userMenuRef} className="relative flex flex-col gap-2 pt-3 border-t border-surface-container-high/50 mt-2">
         {/* Floating User Profile & Logout Pop-up Menu */}
         {showUserMenu && (
           <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 p-3 rounded-xl bg-surface-container border border-surface-container-high/80 shadow-[0_10px_25px_rgba(0,0,0,0.85)] flex flex-col gap-2.5 text-xs font-mono animate-in fade-in slide-in-from-bottom-2 duration-150 z-50">

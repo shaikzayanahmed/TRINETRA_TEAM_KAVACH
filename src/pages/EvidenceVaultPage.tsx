@@ -7,9 +7,7 @@ import { useDemo } from '../context/DemoContext';
 export const EvidenceVaultPage: React.FC = () => {
   const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
-  const [evidenceViewMode, setEvidenceViewMode] = useState<'VIDEO' | 'SNAPSHOT'>('VIDEO');
-  const [isPlaying, setIsPlaying] = useState<boolean>(true);
-  const [playbackProgress, setPlaybackProgress] = useState<number>(0);
+  const [evidenceViewMode, setEvidenceViewMode] = useState<'CLIP' | 'SNAPSHOT'>('CLIP');
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [verificationResult, setVerificationResult] = useState<{ verified: boolean; message: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -55,23 +53,6 @@ export const EvidenceVaultPage: React.FC = () => {
       window.removeEventListener('trinetra_evidence_updated', fetchEvidence);
     };
   }, []);
-
-  // Playback timer simulation
-  useEffect(() => {
-    let interval: any;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setPlaybackProgress((prev) => {
-          if (prev >= 100) {
-            setIsPlaying(false);
-            return 0;
-          }
-          return prev + 2;
-        });
-      }, 250);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying]);
 
   const currentEvidence = activeEvidence || selectedEvidence || evidenceList[0];
 
@@ -175,19 +156,6 @@ export const EvidenceVaultPage: React.FC = () => {
         return 'bg-amber-700 border-amber-400 text-amber-100';
       default:
         return 'bg-surface-container border-outline text-on-surface';
-    }
-  };
-
-  const getColorDot = (colorName?: string) => {
-    switch (colorName) {
-      case 'Silver White': return 'bg-slate-200 border-slate-400';
-      case 'Dark Obsidian': return 'bg-zinc-900 border-zinc-500';
-      case 'Tactical Olive Green': return 'bg-emerald-600 border-emerald-400';
-      case 'Crimson Red': return 'bg-rose-500 border-rose-300';
-      case 'Navy Blue': return 'bg-blue-500 border-blue-300';
-      case 'Steel Metallic Gray': return 'bg-slate-400 border-slate-300';
-      case 'Desert Sand': return 'bg-amber-400 border-amber-200';
-      default: return 'bg-secondary border-secondary';
     }
   };
 
@@ -797,8 +765,6 @@ export const EvidenceVaultPage: React.FC = () => {
                         key={ev.id}
                         onClick={() => {
                           setSelectedEvidence(ev);
-                          setPlaybackProgress(0);
-                          setIsPlaying(false);
                         }}
                         className={`p-3 rounded-lg border transition-all cursor-pointer flex flex-col gap-1.5 ${
                           currentEvidence.id === ev.id
@@ -871,27 +837,6 @@ export const EvidenceVaultPage: React.FC = () => {
 
             <button
               onClick={async () => {
-                const sample = {
-                  id: `EV-${Math.floor(1000 + Math.random() * 9000)}`,
-                  alertId: `ALT-${Math.floor(1000 + Math.random() * 9000)}`,
-                  targetId: 'TGT-101',
-                  cameraId: 'CAM-RGB-01',
-                  timestamp: new Date().toLocaleTimeString(),
-                  type: 'VIDEO_CLIP' as const,
-                  confidence: 97.8,
-                  location: 'Sector 07 Northern Corridor (Live Ingest)',
-                  sector: 'Northern Border Sector 07',
-                  sha256Hash: Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                    .map((b) => b.toString(16).padStart(2, '0'))
-                    .join(''),
-                  hashVerified: true,
-                  privacyStatus: 'PROCESSED' as const,
-                  fileSizeKb: 4820,
-                  durationSeconds: 4,
-                  videoClipUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-                  databaseStored: true,
-                  timeMs: Date.now(),
-                };
                 await apiService.recordVehicleEvidence(
                   {
                     plateNumber: 'DL-01-AB-1234',

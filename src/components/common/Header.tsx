@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCommandPalette }) => {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 h-14 bg-surface-container-lowest/95 backdrop-blur-md border-b border-surface-container-high/60 shadow-[0_4px_20px_rgba(0,0,0,0.55)] px-4 lg:px-6 flex items-center justify-between font-mono text-xs select-none">
+    <header className="fixed top-0 left-0 right-0 z-40 h-14 bg-surface-container-lowest/95 backdrop-blur-md border-b border-surface-container-high/60 shadow-[0_4px_20px_rgba(0,0,0,0.55)] px-4 lg:px-6 flex items-center justify-between font-mono text-xs select-none tactical-glass-accent">
       {/* Brand & Sector */}
       <div className="flex items-center gap-2.5 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -84,13 +84,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCommandPalette }) => {
       {/* Center AI Command Palette Launcher */}
       <button
         onClick={handleOpenPalette}
-        className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-primary/30 text-outline hover:text-on-surface shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] hover:border-primary/60 transition-all flex-shrink-0 group"
+        className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-primary/40 text-outline hover:text-on-surface shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] hover:border-primary/80 transition-all flex-shrink-0 group tactical-glow-hover"
       >
         <span className="material-symbols-outlined text-[16px] text-primary group-hover:scale-110 transition-transform">
-          terminal
+          smart_toy
         </span>
-        <span className="text-[11px] font-mono text-on-surface-variant group-hover:text-on-surface">
-          AI Command Prompt
+        <span className="text-[11px] font-mono font-bold text-primary tracking-wider group-hover:text-primary">
+          KAVACH BOT
         </span>
         <kbd className="px-1.5 py-0.5 rounded bg-surface-container-lowest border border-surface-container-highest text-[10px] text-primary font-mono font-bold">
           Ctrl+K

@@ -3,21 +3,79 @@ import { VirtualFence } from '../../types';
 import { apiService } from '../../services/apiService';
 import { useDemo } from '../../context/DemoContext';
 
+export function isSameCameraFeed(camA?: string, camB?: string): boolean {
+  if (!camA || !camB) return false;
+  const a = camA.toUpperCase().trim();
+  const b = camB.toUpperCase().trim();
+  if (a === b) return true;
+
+  // Secondary feed aliases: CAM-LWIR-01, MEDIA_FILE, CAM-STREAM-02
+  const secondaryGroup = new Set(['CAM-LWIR-01', 'MEDIA_FILE', 'CAM-STREAM-02']);
+  if (secondaryGroup.has(a) && secondaryGroup.has(b)) return true;
+
+  // Primary feed aliases: CAM-RGB-01, DEFAULT_STREAM, WEBCAM
+  const primaryGroup = new Set(['CAM-RGB-01', 'DEFAULT_STREAM', 'WEBCAM']);
+  if (primaryGroup.has(a) && primaryGroup.has(b)) return true;
+
+  return false;
+}
+
 interface VirtualFenceOverlayProps {
   customFence?: VirtualFence;
   cameraId?: string;
   isThermal?: boolean;
+  isDirectlyBreached?: boolean;
 }
 
 export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
   customFence,
   cameraId = 'CAM-RGB-01',
   isThermal = false,
+  isDirectlyBreached = false,
 }) => {
   const [activeFence, setActiveFence] = useState<VirtualFence>(
     customFence || apiService.getActiveFenceSync(cameraId)
   );
-  const { isFenceBreached } = useDemo();
+  const [liveBreached, setLiveBreached] = useState<boolean>(false);
+  const { isFenceBreached, activeTarget, activeAlert } = useDemo();
+
+  useEffect(() => {
+    let breachTimeout: any;
+    const handleLiveBreach = (e: any) => {
+      const breachCam = e.detail?.cameraId || e.detail?.alert?.cameraId || e.detail?.evidence?.cameraId;
+      // Only trigger breach glow on this specific fence if the event belongs to this camera feed
+      if (breachCam && isSameCameraFeed(breachCam, cameraId)) {
+        setLiveBreached(true);
+        clearTimeout(breachTimeout);
+        breachTimeout = setTimeout(() => {
+          setLiveBreached(false);
+        }, 6000);
+      }
+    };
+
+    const handleBreachCleared = (e: any) => {
+      const clearedCam = e.detail?.alert?.cameraId || e.detail?.cameraId;
+      if (!clearedCam || isSameCameraFeed(clearedCam, cameraId)) {
+        setLiveBreached(false);
+      }
+    };
+
+    const handleAlertResolved = (e: any) => {
+      if (e.detail?.hasActiveBreach === false) {
+        setLiveBreached(false);
+      }
+    };
+
+    window.addEventListener('trinetra_live_breach', handleLiveBreach);
+    window.addEventListener('trinetra_breach_cleared', handleBreachCleared);
+    window.addEventListener('trinetra_alert_resolved', handleAlertResolved);
+    return () => {
+      window.removeEventListener('trinetra_live_breach', handleLiveBreach);
+      window.removeEventListener('trinetra_breach_cleared', handleBreachCleared);
+      window.removeEventListener('trinetra_alert_resolved', handleAlertResolved);
+      clearTimeout(breachTimeout);
+    };
+  }, [cameraId]);
 
   useEffect(() => {
     if (customFence) {
@@ -37,10 +95,8 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
         const updated = e.detail.activeFence as VirtualFence;
         if (
           !updated.sourceTarget ||
-          updated.sourceTarget === cameraId ||
-          updated.assignedCameras?.includes(cameraId) ||
-          (cameraId === 'CAM-LWIR-01' && updated.sourceTarget === 'MEDIA_FILE') ||
-          (cameraId === 'CAM-STREAM-02' && updated.sourceTarget === 'MEDIA_FILE')
+          isSameCameraFeed(updated.sourceTarget, cameraId) ||
+          updated.assignedCameras?.some((cam) => isSameCameraFeed(cam, cameraId))
         ) {
           setActiveFence(updated);
         } else {
@@ -55,7 +111,7 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
     return () => {
       window.removeEventListener('trinetra_fence_updated', handleUpdateEvent);
     };
-  }, [customFence]);
+  }, [customFence, cameraId]);
 
   if (!activeFence || !activeFence.points || activeFence.points.length < 2) {
     return null;
@@ -69,16 +125,27 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
   const fenceType = activeFence.type || 'POLYGON';
   const pts = activeFence.points;
   const heightMeters = activeFence.heightMeters || 4.5;
-  const isBreached = isFenceBreached;
+
+  // Demo breach only applies if the scripted demo target or alert corresponds to this camera feed
+  const isDemoBreached = Boolean(
+    isFenceBreached &&
+    (
+      (activeAlert?.cameraId && isSameCameraFeed(activeAlert.cameraId, cameraId)) ||
+      (activeTarget?.cameraId && isSameCameraFeed(activeTarget.cameraId, cameraId)) ||
+      (!activeAlert?.cameraId && !activeTarget?.cameraId && isSameCameraFeed('CAM-RGB-01', cameraId))
+    )
+  );
+
+  const isBreached = Boolean(isDirectlyBreached || liveBreached || isDemoBreached);
 
   const baseColor = isBreached
-    ? '#ff5449'
+    ? '#ff1e1e'
     : isThermal
     ? '#fb923c'
     : '#38bdf8';
 
   const fillColor = isBreached
-    ? 'rgba(255, 84, 73, 0.16)'
+    ? 'rgba(255, 30, 30, 0.30)'
     : isThermal
     ? 'rgba(251, 146, 60, 0.08)'
     : 'rgba(56, 189, 248, 0.08)';
@@ -96,7 +163,7 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
   const midY = (pts[0].y + pts[1].y) / 2;
 
   return (
-    <div className="absolute inset-0 pointer-events-none select-none z-10 overflow-hidden">
+    <div className={`absolute inset-0 pointer-events-none select-none z-10 overflow-hidden ${isBreached ? 'animate-fence-breach-blink' : ''}`}>
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
@@ -111,10 +178,12 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
             </feMerge>
           </filter>
 
-          <filter id={`breachGlow-${cameraId}`} x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="1.5" result="blur" />
+          <filter id={`breachGlow-${cameraId}`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.2" result="blur1" />
+            <feGaussianBlur stdDeviation="1.0" result="blur2" />
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode in="blur1" />
+              <feMergeNode in="blur2" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
@@ -130,9 +199,9 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
               x2={pts[1].x}
               y2={pts[1].y}
               stroke={baseColor}
-              strokeWidth="0.75"
-              strokeDasharray="1.5,1.5"
-              opacity="0.85"
+              strokeWidth={isBreached ? '1.2' : '0.75'}
+              strokeDasharray={isBreached ? '2,1' : '1.5,1.5'}
+              opacity="0.95"
               filter={`url(#${isBreached ? 'breachGlow' : 'laserGlow'}-${cameraId})`}
             />
 
@@ -142,9 +211,9 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
               y1={pts[0].y}
               x2={pts[1].x}
               y2={pts[1].y}
-              stroke="#ffffff"
-              strokeWidth="0.25"
-              opacity="0.9"
+              stroke={isBreached ? '#ffffff' : '#ffffff'}
+              strokeWidth={isBreached ? '0.4' : '0.25'}
+              opacity="1"
             />
 
             {/* Intermediate dotted tick marks along the line */}
@@ -156,9 +225,9 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
                   key={`tick-${idx}`}
                   cx={tickX}
                   cy={tickY}
-                  r="0.6"
-                  fill={baseColor}
-                  opacity="0.9"
+                  r={isBreached ? '1.0' : '0.6'}
+                  fill={isBreached ? '#ff1e1e' : baseColor}
+                  opacity="1"
                 />
               );
             })}
@@ -167,10 +236,10 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
             <circle
               cx={midX}
               cy={midY}
-              r="1.5"
+              r={isBreached ? '2.2' : '1.5'}
               fill="none"
               stroke={baseColor}
-              strokeWidth="0.3"
+              strokeWidth={isBreached ? '0.5' : '0.3'}
               strokeDasharray="0.6,0.6"
             />
           </g>
@@ -188,20 +257,21 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
                 x2={p.x}
                 y2={Math.max(2, p.y - heightMeters * 2.2)}
                 stroke={baseColor}
-                strokeWidth="0.4"
+                strokeWidth={isBreached ? '0.8' : '0.4'}
                 strokeDasharray="1.2,1.2"
-                opacity="0.7"
+                opacity={isBreached ? '0.95' : '0.7'}
+                filter={isBreached ? `url(#breachGlow-${cameraId})` : undefined}
               />
             ))}
 
             {/* Projected Ceiling Wireframe */}
             <polygon
               points={ceilingPointsStr}
-              fill="rgba(173, 198, 255, 0.04)"
+              fill={isBreached ? 'rgba(255, 30, 30, 0.15)' : 'rgba(173, 198, 255, 0.04)'}
               stroke={baseColor}
-              strokeWidth="0.4"
+              strokeWidth={isBreached ? '0.8' : '0.4'}
               strokeDasharray="1.5,1.5"
-              opacity="0.75"
+              opacity="0.85"
             />
 
             {/* Floor Base Polygon */}
@@ -209,8 +279,8 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
               points={polygonPointsStr}
               fill={fillColor}
               stroke={baseColor}
-              strokeWidth="0.6"
-              strokeDasharray="2,1.5"
+              strokeWidth={isBreached ? '1.2' : '0.6'}
+              strokeDasharray={isBreached ? '2.5,1' : '2,1.5'}
               filter={`url(#${isBreached ? 'breachGlow' : 'laserGlow'}-${cameraId})`}
             />
           </g>
@@ -224,8 +294,8 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
               points={polygonPointsStr}
               fill={fillColor}
               stroke={baseColor}
-              strokeWidth="0.6"
-              strokeDasharray="2,1.5"
+              strokeWidth={isBreached ? '1.2' : '0.6'}
+              strokeDasharray={isBreached ? '2.5,1' : '2,1.5'}
               filter={`url(#${isBreached ? 'breachGlow' : 'laserGlow'}-${cameraId})`}
             />
           </g>
@@ -238,20 +308,20 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
             <circle
               cx={p.x}
               cy={p.y}
-              r="1.2"
+              r={isBreached ? '2.0' : '1.2'}
               fill="none"
               stroke={baseColor}
-              strokeWidth="0.3"
+              strokeWidth={isBreached ? '0.5' : '0.3'}
               strokeDasharray="0.8,0.8"
-              opacity={isBreached ? '1' : '0.8'}
+              opacity="1"
             />
             {/* Solid Center Node Point */}
             <circle
               cx={p.x}
               cy={p.y}
-              r="0.5"
-              fill={isBreached ? '#ff5449' : '#ffffff'}
-              stroke={baseColor}
+              r={isBreached ? '0.9' : '0.5'}
+              fill={isBreached ? '#ff1e1e' : '#ffffff'}
+              stroke={isBreached ? '#ffffff' : baseColor}
               strokeWidth="0.2"
             />
           </g>
@@ -261,19 +331,19 @@ export const VirtualFenceOverlay: React.FC<VirtualFenceOverlayProps> = ({
       {/* Tactical HUD Header Badge Overlay */}
       <div className="absolute top-2 left-2 flex items-center gap-1.5 font-mono text-[9px] pointer-events-none">
         <div
-          className={`px-2 py-0.5 rounded-md backdrop-blur-md border flex items-center gap-1.5 shadow-md ${
+          className={`px-2 py-0.5 rounded-md backdrop-blur-md border flex items-center gap-1.5 shadow-md transition-all ${
             isBreached
-              ? 'bg-error-container/90 text-on-error border-error animate-pulse'
+              ? 'bg-red-950/90 text-red-100 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse'
               : 'bg-surface-container-lowest/80 text-on-surface border-surface-container-high/80'
           }`}
         >
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isBreached ? 'bg-error animate-ping' : 'bg-primary'
+            className={`w-2 h-2 rounded-full ${
+              isBreached ? 'bg-red-500 animate-ping' : 'bg-primary'
             }`}
           />
           <span className="font-bold tracking-wider uppercase">
-            {isBreached ? '⚠️ TRIPWIRE BREACH' : `TRIPWIRE: ${activeFence.name}`}
+            {isBreached ? '⚠️ TRIPWIRE BREACH DETECTED' : `TRIPWIRE: ${activeFence.name}`}
           </span>
           <span className="text-outline text-[8px]">[{activeFence.id}]</span>
         </div>

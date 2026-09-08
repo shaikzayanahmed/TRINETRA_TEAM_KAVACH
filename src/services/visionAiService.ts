@@ -123,7 +123,10 @@ class VisionAiService {
     streamId: string,
     score: number,
     videoElement: HTMLVideoElement,
-    now: number
+    now: number,
+    classification?: string,
+    rawBbox?: [number, number, number, number],
+    anprRecord?: AnprRecord
   ) {
     const lastBreach = this.lastBreachReportMs.get(targetId) || 0;
     if (now - lastBreach < 8000) {
@@ -151,20 +154,34 @@ class VisionAiService {
       console.warn('[VisionAiService] Failed to capture video snapshot:', e);
     }
 
+    const isVehicle = classification ? VEHICLE_CLASSES.has(classification.toUpperCase()) : targetId.startsWith('TGT-V');
+
+    const resolvedCameraId = streamId === 'DEFAULT_STREAM' ? 'CAM-RGB-01' : (streamId || 'CAM-RGB-01');
+
     const { alert, evidence } = apiService.recordBreachEvidenceAndAlert({
       targetId,
-      cameraId: streamId === 'DEFAULT_STREAM' ? 'CAM-RGB-01' : streamId,
+      targetClassification: isVehicle ? 'VEHICLE' : 'PERSON',
+      cameraId: resolvedCameraId,
       zoneName,
       confidence: score || 98.4,
       snapshotBase64,
       videoElement,
+      rawBbox,
+      anprRecord,
     });
 
     try {
       soundService.playBreachAlarm();
       window.dispatchEvent(
         new CustomEvent('trinetra_live_breach', {
-          detail: { alert, evidence, targetId, zoneName, timestamp: new Date().toISOString() },
+          detail: {
+            alert,
+            evidence,
+            targetId,
+            zoneName,
+            cameraId: resolvedCameraId,
+            timestamp: new Date().toISOString()
+          },
         })
       );
     } catch (e) {}
@@ -533,11 +550,19 @@ class VisionAiService {
           continue;
         }
 
-        const isHuman = existing.class === 'PERSON' || existing.class === 'HUMAN';
-        const isTripwireBreach = isHuman && checkTargetFenceBreach(smoothedCx, smoothedCy, streamId);
+        const isTripwireBreach = checkTargetFenceBreach(smoothedCx, smoothedCy, streamId);
 
         if (isTripwireBreach) {
-          this.triggerLiveBreachAlert(existing.id, streamId, cand.score, videoElement, now);
+          this.triggerLiveBreachAlert(
+            existing.id,
+            streamId,
+            cand.score,
+            videoElement,
+            now,
+            existing.class,
+            cand.rawBbox,
+            anprRecord
+          );
         }
 
         mappedResults.push({
@@ -632,11 +657,19 @@ class VisionAiService {
           continue;
         }
 
-        const isHuman = cand.upperClass === 'PERSON' || cand.upperClass === 'HUMAN';
-        const isTripwireBreach = isHuman && checkTargetFenceBreach(cand.cx, cand.cy, streamId);
+        const isTripwireBreach = checkTargetFenceBreach(cand.cx, cand.cy, streamId);
 
         if (isTripwireBreach) {
-          this.triggerLiveBreachAlert(newId, streamId, cand.score, videoElement, now);
+          this.triggerLiveBreachAlert(
+            newId,
+            streamId,
+            cand.score,
+            videoElement,
+            now,
+            cand.upperClass,
+            cand.rawBbox,
+            initialAnpr
+          );
         }
 
         mappedResults.push({
@@ -691,8 +724,7 @@ class VisionAiService {
             const smoothed = track.bboxFilter.filter(currentX, currentY, track.width, track.height, now);
             const centerX = smoothed.x + smoothed.width / 2;
             const centerY = smoothed.y + smoothed.height / 2;
-            const isHuman = track.class === 'PERSON' || track.class === 'HUMAN';
-            const isTripwireBreach = isHuman && checkTargetFenceBreach(centerX, centerY, streamId);
+            const isTripwireBreach = checkTargetFenceBreach(centerX, centerY, streamId);
 
             mappedResults.push({
               id: track.id,
@@ -744,18 +776,10 @@ class VisionAiService {
     }
   }
 
-  private pruneInactiveTracks(activeTracks: Map<string, ActiveTrack>, now: number) {
-    for (const [id, track] of activeTracks.entries()) {
-      if (now - track.lastSeenMs > 950 || track.missedFrames > 8) {
-        activeTracks.delete(id);
-      }
-    }
-  }
-
   public getAllActiveLiveTargets(): Target[] {
     const targets: Target[] = [];
     for (const [streamId, tracks] of this.streamTracks.entries()) {
-      for (const [trackId, track] of tracks.entries()) {
+      for (const [, track] of tracks.entries()) {
         const isVehicle = VEHICLE_CLASSES.has(track.class);
         const classification = (track.class === 'PERSON' || track.class === 'HUMAN') ? 'PERSON' : (isVehicle ? 'VEHICLE' : 'UNKNOWN');
 

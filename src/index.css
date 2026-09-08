@@ -42,4 +42,45 @@
   .text-glow-secondary {
     text-shadow: 0 0 8px rgba(149, 212, 176, 0.4);
   }
+
+  @keyframes fence-breach-blink {
+    0%, 100% {
+      opacity: 1;
+      filter: drop-shadow(0 0 10px rgba(255, 20, 20, 1)) drop-shadow(0 0 20px rgba(239, 68, 68, 0.85));
+      stroke: #ff1a1a;
+    }
+    50% {
+      opacity: 0.25;
+      filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.4));
+      stroke: #ff7777;
+    }
+  }
+
+  .animate-fence-breach-blink {
+    animation: fence-breach-blink 0.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Subtle tactical UI utility accents */
+  .tactical-glass-accent {
+    position: relative;
+  }
+  .tactical-glass-accent::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(173, 198, 255, 0.6) 30%, rgba(149, 212, 176, 0.6) 70%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .tactical-glow-hover {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .tactical-glow-hover:hover {
+    box-shadow: 0 0 16px rgba(173, 198, 255, 0.18), inset 0 0 8px rgba(173, 198, 255, 0.08);
+    transform: translateY(-1px);
+  }
 }
+

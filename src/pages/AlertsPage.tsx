@@ -359,12 +359,19 @@ export const AlertsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Virtual Fence Preset Badge */}
+                {/* Virtual Fence Preset Badge & Vehicle Plate Tag */}
                 <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
                   <span className="px-2 py-0.5 rounded bg-surface-container-highest border border-primary/30 text-primary font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-[13px]">fence</span>
                     <span>PRESET: {alert.fenceName || alert.zone} {alert.fenceType ? `(${alert.fenceType})` : ''}</span>
                   </span>
+
+                  {alert.plateNumber && (
+                    <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/50 text-amber-300 font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">directions_car</span>
+                      <span>PLATE: {alert.plateNumber}</span>
+                    </span>
+                  )}
 
                   {alert.timelineTag && (
                     <span className="px-2 py-0.5 rounded bg-primary/15 border border-primary/40 text-primary font-bold">
@@ -762,6 +769,15 @@ export const AlertsPage: React.FC = () => {
 
                     <span className="text-outline">Classification:</span>
                     <span className="text-right text-error font-bold">{selectedAlert.targetClassification}</span>
+
+                    {selectedAlert.plateNumber && (
+                      <>
+                        <span className="text-outline">ANPR Vehicle Plate:</span>
+                        <span className="text-right text-amber-300 font-bold font-mono tracking-wider">
+                          {selectedAlert.plateNumber}
+                        </span>
+                      </>
+                    )}
 
                     <span className="text-outline">Fence Preset:</span>
                     <span className="text-right text-primary font-bold">{selectedAlert.fenceName || selectedAlert.zone}</span>

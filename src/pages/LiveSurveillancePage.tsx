@@ -1,23 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Camera, VirtualFence } from '../types';
 import { apiService } from '../services/apiService';
 import { CameraPanel } from '../components/camera/CameraPanel';
 import { useDemo } from '../context/DemoContext';
 import { useAuth } from '../context/AuthContext';
+import { globalMediaStreamService } from '../services/globalMediaStreamService';
 
 type SurveillanceViewMode = 'SPLIT' | 'CAM-RGB-01' | 'CAM-LWIR-01';
 
 export const LiveSurveillancePage: React.FC = () => {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [showOverlays, setShowOverlays] = useState<boolean>(true);
-  const [opticalFilter, setOpticalFilter] = useState<'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS'>('STANDARD');
+  const [opticalFilter, setOpticalFilter] = useState<'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS' | 'THERMAL_CAMO'>('STANDARD');
   const [viewMode, setViewMode] = useState<SurveillanceViewMode>('SPLIT');
   const [fences, setFences] = useState<VirtualFence[]>([]);
   const [activeFenceId, setActiveFenceId] = useState<string>('VF-01');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { activeTarget, isFenceBreached, startDemo, isRunning } = useDemo();
   const { isOperator, isAdmin } = useAuth();
+
+  const handleMediaFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    globalMediaStreamService.setActiveMedia({
+      videoSrc: url,
+      fileName: file.name,
+      isPlaying: true,
+      currentTime: 0,
+      isLooping: true,
+      spectralFilter: 'OPTICAL',
+      filterMode: 'MOVING_VEHICLES',
+    });
+    // Ensure CAM-LWIR-01 is visible (either split or focused)
+    if (viewMode === 'CAM-RGB-01') {
+      setViewMode('SPLIT');
+    }
+  };
 
   const loadFences = async () => {
     const list = await apiService.getVirtualFences();
@@ -79,6 +100,15 @@ export const LiveSurveillancePage: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4 select-none">
+      {/* Hidden File Input for Direct Media Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="video/mp4,video/webm,video/ogg,video/quicktime,video/mkv,.mp4,.webm,.mov,.mkv"
+        className="hidden"
+        onChange={handleMediaFileUpload}
+      />
+
       {/* Top Controls & Surveillance Header */}
       <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -97,6 +127,16 @@ export const LiveSurveillancePage: React.FC = () => {
 
         {/* Tactical Controls Toolbar */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          {/* Direct Media Upload Action Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload MP4, WebM, MOV, or MKV Video File for Live AI Analysis"
+            className="px-3 py-1.5 rounded-lg bg-tertiary text-on-tertiary font-bold uppercase hover:bg-tertiary/90 transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,183,125,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[16px]">upload_file</span>
+            <span>UPLOAD MEDIA FILE</span>
+          </button>
+
           {/* Feed Fullscreen Viewport Mode Selector */}
           <div className="flex items-center gap-0.5 bg-surface-container border border-surface-container-high rounded-lg p-0.5 text-[11px]">
             <button
@@ -177,15 +217,16 @@ export const LiveSurveillancePage: React.FC = () => {
 
           <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-container border border-surface-container-high text-[11px]">
             <span className="text-outline">FILTER:</span>
-            {(['STANDARD', 'CONTRAST_ENHANCED', 'HIGH_PASS'] as const).map((filter) => (
+            {(['STANDARD', 'CONTRAST_ENHANCED', 'HIGH_PASS', 'THERMAL_CAMO'] as const).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setOpticalFilter(filter)}
+                title={filter === 'THERMAL_CAMO' ? 'Thermal Camouflage Defeat Filter' : undefined}
                 className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                  opticalFilter === filter ? 'bg-surface-container-high text-primary' : 'text-outline hover:text-on-surface'
+                  opticalFilter === filter ? 'bg-surface-container-high text-primary font-bold shadow-sm' : 'text-outline hover:text-on-surface'
                 }`}
               >
-                {filter === 'STANDARD' ? 'STD' : filter === 'CONTRAST_ENHANCED' ? 'ENH' : 'HIPASS'}
+                {filter === 'STANDARD' ? 'STD' : filter === 'CONTRAST_ENHANCED' ? 'ENH' : filter === 'HIGH_PASS' ? 'HIPASS' : 'CAMO'}
               </button>
             ))}
           </div>

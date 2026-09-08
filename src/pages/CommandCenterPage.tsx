@@ -14,7 +14,7 @@ export const CommandCenterPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [feedViewMode, setFeedViewMode] = useState<'SPLIT' | 'CAM-RGB-01' | 'CAM-LWIR-01'>('SPLIT');
 
-  const { activeTarget, activeAlert, isFenceBreached } = useDemo();
+  const { activeTarget, activeAlert } = useDemo();
   const { isOperator, isAdmin } = useAuth();
 
   useEffect(() => {

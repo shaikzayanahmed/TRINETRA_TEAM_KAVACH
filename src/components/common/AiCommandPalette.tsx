@@ -109,6 +109,62 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
     }
   };
 
+  const submitQuery = () => {
+    const trimmed = query.trim();
+    if (trimmed) {
+      // 1. If explicit teaching pattern (e.g. learn "foo" = "bar")
+      const teachMatch = commandService.parseTeachingCommand(trimmed);
+      if (teachMatch) {
+        setAiOutput(teachMatch.message);
+        setMemoryStats(commandService.getMemoryStats());
+        refreshData();
+        return;
+      }
+
+      // 2. If conversational question / inquiry
+      const lower = trimmed.toLowerCase();
+      const isQuestion =
+        lower.startsWith('who') ||
+        lower.startsWith('what') ||
+        lower.startsWith('where') ||
+        lower.startsWith('how') ||
+        lower.startsWith('why') ||
+        lower.startsWith('hi') ||
+        lower.startsWith('hello') ||
+        lower.startsWith('hey') ||
+        lower.includes('?') ||
+        lower.includes('bot') ||
+        lower.includes('kavach');
+
+      if (isQuestion) {
+        const reply = commandService.generateDynamicAiReply(trimmed);
+        setAiOutput(reply);
+        return;
+      }
+
+      // 3. Natural language or command alias lookup
+      const res = commandService.parseNaturalPrompt(trimmed);
+      setMemoryStats(commandService.getMemoryStats());
+
+      if (res.matchedCommand) {
+        executeCommand(res.matchedCommand);
+        return;
+      }
+
+      if (filteredCommands.length > 0 && selectedIndex >= 0 && filteredCommands[selectedIndex]) {
+        executeCommand(filteredCommands[selectedIndex]);
+        return;
+      }
+
+      if (res.aiDirectAnswer) {
+        setAiOutput(res.aiDirectAnswer);
+        return;
+      }
+    } else if (filteredCommands.length > 0 && selectedIndex >= 0 && filteredCommands[selectedIndex]) {
+      executeCommand(filteredCommands[selectedIndex]);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -118,19 +174,7 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
       setSelectedIndex((prev) => (prev - 1 + filteredCommands.length) % Math.max(1, filteredCommands.length));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (query.trim()) {
-        // Natural language prompt query & self-learning
-        const res = commandService.parseNaturalPrompt(query);
-        setMemoryStats(commandService.getMemoryStats());
-
-        if (res.matchedCommand) {
-          executeCommand(res.matchedCommand);
-        } else if (res.aiDirectAnswer) {
-          setAiOutput(res.aiDirectAnswer);
-        }
-      } else if (filteredCommands.length > 0) {
-        executeCommand(filteredCommands[selectedIndex]);
-      }
+      submitQuery();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
@@ -156,7 +200,7 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
     if (window.confirm('Reset all learned AI phrases and frequency memory to defaults?')) {
       commandService.clearMemory();
       refreshData();
-      setAiOutput('AI Memory wiped and reset to factory baseline.');
+      setAiOutput('Kavach Bot memory wiped and reset to factory baseline.');
     }
   };
 
@@ -172,12 +216,12 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
         className="w-full max-w-2xl bg-surface-container-low border border-surface-container-high/80 rounded-2xl shadow-tactical-extruded flex flex-col overflow-hidden cursor-default"
       >
         {/* Terminal Command Header / Prompt Bar */}
-        <div className="p-4 border-b border-surface-container-high/60 bg-surface-container-lowest/80 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-surface-container-high border border-primary/30 flex items-center justify-center text-primary shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)]">
-            <span className="material-symbols-outlined text-[20px] animate-pulse">psychology</span>
+        <div className="p-4 border-b border-surface-container-high/60 bg-surface-container-lowest/90 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-surface-container-high border border-primary/40 flex items-center justify-center text-primary shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] flex-shrink-0">
+            <span className="material-symbols-outlined text-[22px] animate-pulse">smart_toy</span>
           </div>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative flex items-center gap-2">
             <input
               ref={inputRef}
               type="text"
@@ -187,13 +231,22 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
                 setAiOutput(null);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Type tactical command or ask AI (e.g. 'cams', 'who is operator?', 'simulate breach')..."
+              placeholder="Ask KAVACH BOT or type command (e.g. 'cams', 'who are you?', 'simulate breach')..."
               className="w-full bg-transparent font-mono text-xs text-on-surface placeholder:text-outline focus:outline-none tracking-wide"
             />
+            {/* Direct Interactive Enter / Execute Button */}
+            <button
+              onClick={submitQuery}
+              title="Execute / Submit (Press Enter)"
+              className="px-2.5 py-1 rounded-md bg-primary/20 hover:bg-primary text-primary hover:text-on-primary border border-primary/40 text-[10px] font-mono font-bold flex items-center gap-1 transition-all flex-shrink-0 shadow-sm"
+            >
+              <span>EXEC</span>
+              <kbd className="text-[9px]">↵</kbd>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 font-mono text-[10px] text-outline">
-            <div className="flex items-center gap-1">
+            <div className="hidden sm:flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high border border-surface-container-highest">ESC</kbd>
               <span>EXIT</span>
             </div>
@@ -220,7 +273,7 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
                     : 'bg-surface-container-high/50 border-surface-container-highest text-outline hover:text-on-surface'
                 }`}
               >
-                {cat === 'AI_INTEL' ? 'AI INTEL / Q&A' : cat}
+                {cat === 'AI_INTEL' ? 'KAVACH INTEL / Q&A' : cat}
               </button>
             ))}
           </div>
@@ -235,9 +288,46 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
             }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-            <span>AI LEARNING & STATS ({Object.keys(memoryStats.aliases).length})</span>
+            <span>KAVACH BOT LEARNING ({Object.keys(memoryStats.aliases).length})</span>
           </button>
         </div>
+
+        {/* Quick Suggestion Chips */}
+        {activeCategory !== 'LEARNING' && (
+          <div className="px-4 py-1.5 bg-surface-container-lowest/30 border-b border-surface-container-high/30 flex items-center gap-2 overflow-x-auto font-mono text-[10px] no-scrollbar">
+            <span className="text-outline flex-shrink-0 text-[9px] uppercase font-bold tracking-wider">Quick:</span>
+            {[
+              { label: '📹 Live Cams', query: 'live surveillance feed' },
+              { label: '🚨 Breach Sim', query: 'simulate breach' },
+              { label: '🛡️ Geo-Fence', query: 'virtual fence' },
+              { label: '🛰️ Tactical Map', query: 'tactical map' },
+              { label: '🏷️ ANPR Plates', query: 'anpr license plates' },
+              { label: '⚡ Security Status', query: 'what is system status?' },
+              { label: '🤖 Who are you?', query: 'who are you?' },
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                onClick={() => {
+                  setQuery(chip.query);
+                  const trimmed = chip.query.trim().toLowerCase();
+                  const isQuestion = trimmed.includes('?') || trimmed.startsWith('who') || trimmed.startsWith('what');
+                  if (isQuestion) {
+                    const reply = commandService.generateDynamicAiReply(chip.query);
+                    setAiOutput(reply);
+                  } else {
+                    const res = commandService.parseNaturalPrompt(chip.query);
+                    if (res.matchedCommand) {
+                      executeCommand(res.matchedCommand);
+                    }
+                  }
+                }}
+                className="px-2 py-0.5 rounded-full bg-surface-container-high/60 hover:bg-primary/20 border border-surface-container-highest hover:border-primary/40 text-on-surface-variant hover:text-primary transition-all flex-shrink-0 whitespace-nowrap shadow-sm hover:scale-105 active:scale-95"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Interactive AI Answer Banner */}
         {aiOutput && (
@@ -246,7 +336,7 @@ export const AiCommandPalette: React.FC<AiCommandPaletteProps> = ({ isOpen, onCl
               smart_toy
             </span>
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-outline uppercase font-bold">Trinetra Tactical AI Core:</span>
+              <span className="text-[10px] text-outline uppercase font-bold">KAVACH BOT INTELLIGENCE:</span>
               <p className="text-on-surface font-semibold leading-relaxed">{aiOutput}</p>
             </div>
           </div>

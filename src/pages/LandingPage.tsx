@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 
 interface PerimeterNode {
@@ -20,49 +20,20 @@ const PERIMETER_NODES: PerimeterNode[] = [
 ];
 
 export const LandingPage: React.FC = () => {
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0, normX: 0.5, normY: 0.5 });
-  const [activeNode, setActiveNode] = useState<PerimeterNode | null>(null);
-  const [cardRotations, setCardRotations] = useState<{ [key: string]: { x: number; y: number } }>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mousePosRef = useRef({ x: -1000, y: -1000 });
 
-  // Smooth mouse tracking
+  // Smooth mouse tracking on canvas without triggering React re-renders
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const normX = x / rect.width;
-    const normY = y / rect.height;
-
-    setMousePos({ x, y, normX, normY });
+    mousePosRef.current = { x, y };
   }, []);
 
-  // Card 3D tilt calculation on hover
-  const handleCardMouseMove = (id: string, e: React.MouseEvent<HTMLDivElement>) => {
-    const card = e.currentTarget;
-    const rect = card.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const rotateX = ((y - centerY) / centerY) * -7; // max 7 deg
-    const rotateY = ((x - centerX) / centerX) * 7;
-
-    setCardRotations((prev) => ({
-      ...prev,
-      [id]: { x: rotateX, y: rotateY },
-    }));
-  };
-
-  const handleCardMouseLeave = (id: string) => {
-    setCardRotations((prev) => ({
-      ...prev,
-      [id]: { x: 0, y: 0 },
-    }));
-  };
-
-  // Canvas radar backdrop with subtle interactive particle connection to cursor
+  // Canvas radar backdrop with ultra-smooth 60fps loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -102,8 +73,8 @@ export const LandingPage: React.FC = () => {
       }
 
       // Draw Tactical Radar nodes and connections to mouse
-      const targetMouseX = mousePos.x;
-      const targetMouseY = mousePos.y;
+      const targetMouseX = mousePosRef.current.x;
+      const targetMouseY = mousePosRef.current.y;
 
       PERIMETER_NODES.forEach((node) => {
         const nx = (node.x / 100) * canvas.width;
@@ -173,7 +144,7 @@ export const LandingPage: React.FC = () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', resizeCanvas);
     };
-  }, [mousePos]);
+  }, []);
 
   return (
     <div
@@ -181,11 +152,11 @@ export const LandingPage: React.FC = () => {
       onMouseMove={handleMouseMove}
       className="relative min-h-screen bg-surface text-on-surface flex flex-col font-body overflow-x-hidden select-none"
     >
-      {/* Interactive Ambient Spotlight (Follows Mouse subtly) */}
+      {/* Interactive Ambient Spotlight */}
       <div
         className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-500"
         style={{
-          background: `radial-gradient(700px circle at ${mousePos.x}px ${mousePos.y}px, rgba(173, 198, 255, 0.055), transparent 75%)`,
+          background: 'radial-gradient(900px circle at 50% 30%, rgba(173, 198, 255, 0.055), transparent 75%)',
         }}
       />
 
@@ -220,8 +191,8 @@ export const LandingPage: React.FC = () => {
             <span className="text-secondary font-bold">RADAR ACTIVE</span>
           </div>
           <span className="text-surface-container-highest">|</span>
-          <span>LAT: {(34.1526 + (mousePos.normY - 0.5) * 0.04).toFixed(4)}°N</span>
-          <span>LON: {(77.5771 + (mousePos.normX - 0.5) * 0.04).toFixed(4)}°E</span>
+          <span>LAT: 34.2911°N</span>
+          <span>LON: 77.7533°E</span>
           <span className="text-surface-container-highest">|</span>
           <span className="text-primary">GRID: SECTOR 07</span>
         </div>
@@ -263,54 +234,38 @@ export const LandingPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {PERIMETER_NODES.map((node) => (
-              <button
+              <div
                 key={node.id}
-                onMouseEnter={() => setActiveNode(node)}
-                onMouseLeave={() => setActiveNode(null)}
-                className={`px-2.5 py-1 rounded-md font-mono text-[10px] border transition-all flex items-center gap-1.5 ${
-                  activeNode?.id === node.id
-                    ? 'bg-primary/20 border-primary text-primary shadow-[0_0_8px_rgba(173,198,255,0.4)]'
-                    : 'bg-surface-container-high/60 border-surface-container-highest text-on-surface-variant hover:text-on-surface'
-                }`}
+                className="px-2.5 py-1 rounded-md font-mono text-[10px] border border-surface-container-highest bg-surface-container-high/60 text-on-surface-variant hover:text-primary hover:border-primary/60 hover:bg-primary/10 transition-all flex items-center gap-1.5 cursor-default"
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${node.type === 'TRIPWIRE' ? 'bg-tertiary' : 'bg-secondary'}`} />
                 <span>{node.name}</span>
                 <span className="text-outline">({node.latency})</span>
-              </button>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Key Metrics Strip with 3D Tilt Effect */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mt-8 max-w-4xl perspective-[1000px]">
+        {/* Key Metrics Strip with Smooth CSS Hover Effect */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mt-8 max-w-4xl">
           {[
             { id: 'm1', val: '< 5 ms', label: 'Inference Latency', color: 'text-secondary', icon: 'speed' },
             { id: 'm2', val: '< 5 KB', label: 'Payload / Alert', color: 'text-primary', icon: 'compress' },
             { id: 'm3', val: 'SHA-256', label: 'Evidence Integrity', color: 'text-tertiary', icon: 'verified' },
             { id: 'm4', val: 'DPDPA', label: 'Privacy by Design', color: 'text-secondary', icon: 'shield' },
-          ].map((item) => {
-            const rot = cardRotations[item.id] || { x: 0, y: 0 };
-            return (
-              <div
-                key={item.id}
-                onMouseMove={(e) => handleCardMouseMove(item.id, e)}
-                onMouseLeave={() => handleCardMouseLeave(item.id)}
-                style={{
-                  transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`,
-                  transition: 'transform 0.15s ease-out',
-                  transformStyle: 'preserve-3d',
-                }}
-                className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate hover:border-primary/40 hover:shadow-[0_4px_20px_rgba(0,0,0,0.7)] flex flex-col items-center cursor-default transition-colors group"
-              >
-                <span className={`font-mono text-2xl lg:text-3xl font-bold ${item.color} group-hover:scale-105 transition-transform`}>
-                  {item.val}
-                </span>
-                <span className="font-mono text-xs text-outline mt-1 uppercase group-hover:text-on-surface transition-colors">
-                  {item.label}
-                </span>
-              </div>
-            );
-          })}
+          ].map((item) => (
+            <div
+              key={item.id}
+              className="p-4 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate hover:border-primary/50 hover:bg-surface-container hover:-translate-y-1 hover:shadow-[0_8px_24px_rgba(0,0,0,0.6)] flex flex-col items-center cursor-default transition-all duration-200 group"
+            >
+              <span className={`font-mono text-2xl lg:text-3xl font-bold ${item.color} group-hover:scale-105 transition-transform`}>
+                {item.val}
+              </span>
+              <span className="font-mono text-xs text-outline mt-1 uppercase group-hover:text-on-surface transition-colors">
+                {item.label}
+              </span>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -326,7 +281,7 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 perspective-[1000px]">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
               {
                 id: 'p1',
@@ -346,32 +301,22 @@ export const LandingPage: React.FC = () => {
                 title: 'Evidence Integrity & Privacy',
                 desc: 'All evidence clips are cryptographically sealed with SHA-256 checksums at the edge source. Biometric faces of non-targets are automatically blurred for statutory DPDPA compliance.',
               },
-            ].map((pillar) => {
-              const rot = cardRotations[pillar.id] || { x: 0, y: 0 };
-              return (
-                <div
-                  key={pillar.id}
-                  onMouseMove={(e) => handleCardMouseMove(pillar.id, e)}
-                  onMouseLeave={() => handleCardMouseLeave(pillar.id)}
-                  style={{
-                    transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`,
-                    transition: 'transform 0.15s ease-out',
-                    transformStyle: 'preserve-3d',
-                  }}
-                  className="p-6 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate hover:border-primary/50 hover:shadow-[0_8px_30px_rgba(0,0,0,0.8)] flex flex-col gap-3 transition-colors group cursor-default"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-surface-container-high border border-primary/30 flex items-center justify-center text-primary group-hover:scale-110 group-hover:border-primary group-hover:shadow-[0_0_12px_rgba(173,198,255,0.4)] transition-all">
-                    <span className="material-symbols-outlined text-2xl">{pillar.icon}</span>
-                  </div>
-                  <h3 className="font-headline text-lg font-bold text-on-surface uppercase tracking-wide group-hover:text-primary transition-colors">
-                    {pillar.title}
-                  </h3>
-                  <p className="font-body text-sm text-on-surface-variant leading-relaxed">
-                    {pillar.desc}
-                  </p>
+            ].map((pillar) => (
+              <div
+                key={pillar.id}
+                className="p-6 rounded-xl bg-surface-container-low border border-surface-container-high/60 shadow-tactical-plate hover:border-primary/50 hover:bg-surface-container hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(0,0,0,0.7)] flex flex-col gap-3 transition-all duration-200 group cursor-default"
+              >
+                <div className="w-10 h-10 rounded-lg bg-surface-container-high border border-primary/30 flex items-center justify-center text-primary group-hover:scale-110 group-hover:border-primary group-hover:shadow-[0_0_12px_rgba(173,198,255,0.4)] transition-all">
+                  <span className="material-symbols-outlined text-2xl">{pillar.icon}</span>
                 </div>
-              );
-            })}
+                <h3 className="font-headline text-lg font-bold text-on-surface uppercase tracking-wide group-hover:text-primary transition-colors">
+                  {pillar.title}
+                </h3>
+                <p className="font-body text-sm text-on-surface-variant leading-relaxed">
+                  {pillar.desc}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

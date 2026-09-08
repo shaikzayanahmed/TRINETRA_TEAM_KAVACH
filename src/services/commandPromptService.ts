@@ -339,17 +339,17 @@ export class CommandPromptService {
   public searchCommands(query: string): CommandItem[] {
     const cleanQuery = query.trim().toLowerCase();
     const commands = SYSTEM_COMMANDS.map((cmd) => {
-      let weight = this.learnedMemory.usageFrequency[cmd.id] || 0;
+      let weight = this.memory.usageFrequency[cmd.id] || 0;
       let isLearnedMatch = false;
 
       // Check learned alias
-      if (cleanQuery && this.learnedMemory.aliases[cleanQuery] === cmd.id) {
+      if (cleanQuery && this.memory.aliases[cleanQuery] === cmd.id) {
         weight += 100;
         isLearnedMatch = true;
       }
 
       // Check partial alias match
-      for (const [alias, mappedId] of Object.entries(this.learnedMemory.aliases)) {
+      for (const [alias, mappedId] of Object.entries(this.memory.aliases)) {
         if (mappedId === cmd.id && (alias.includes(cleanQuery) || cleanQuery.includes(alias))) {
           weight += 50;
           isLearnedMatch = true;
@@ -407,17 +407,17 @@ export class CommandPromptService {
     }
 
     // 4. Identity & System capabilities
-    if (clean.includes('who are you') || clean.includes('what are you') || clean.includes('what can you do')) {
-      return `SYSTEM IDENTIFICATION: I am TRINETRA TACTICAL AI (v2.4-CORE). I manage real-time edge INT8 YOLOv8 inference, spatial virtual tripwires, SHA-256 evidence integrity, and self-learning tactical command routing. You can type commands or ask any border telemetry question.`;
+    if (clean.includes('who are you') || clean.includes('what are you') || clean.includes('what can you do') || clean.includes('bot') || clean.includes('kavach')) {
+      return `SYSTEM IDENTIFICATION: I am KAVACH BOT (v2.4-CORE), your tactical edge-native AI assistant for Project TRINETRA. I monitor real-time YOLOv8 detections, boundary tripwires, SHA-256 evidence integrity, ANPR optical license plate tracking, and autonomous threat alerts. You can type commands, ask tactical questions, or teach custom aliases.`;
     }
 
     // 5. Greeting
     if (clean.startsWith('hi') || clean.startsWith('hello') || clean.startsWith('hey')) {
-      return `GREETINGS OPERATOR: Tactical AI Console online and monitoring Sector 07. Type a command (e.g. 'surveillance', 'map', 'simulate breach') or teach a custom alias using: learn "alias" = "command".`;
+      return `GREETINGS OPERATOR: KAVACH BOT is online and monitoring Northern Border Sector 07. Type a command (e.g. 'surveillance', 'map', 'simulate breach') or ask any tactical question.`;
     }
 
     // Default conversational AI fallback
-    return `TRINETRA AI: Tactical query "${prompt}" analyzed against Northern Sector 07 edge telemetry. All subsystems nominal. You can execute navigation, simulate events, or teach custom aliases using: learn "your phrase" = "action".`;
+    return `KAVACH BOT: Tactical query "${prompt}" processed against Northern Sector 07 edge telemetry. Subsystems online and nominal. You can execute navigation commands, simulate breaches, or teach custom aliases using: learn "your phrase" = "action".`;
   }
 
   public parseNaturalPrompt(prompt: string): { matchedCommand: CommandItem | null; aiDirectAnswer?: string } {

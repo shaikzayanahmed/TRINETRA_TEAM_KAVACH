@@ -141,6 +141,11 @@ export interface Alert {
   resolvedBy?: string;
   evidenceId: string;
   thumbnailUrl?: string;
+  plateNumber?: string;
+  plateCropUrl?: string;
+  vehicleColor?: string;
+  vehicleType?: string;
+  anprRecord?: AnprRecord;
   zoneName?: string;
   videoClipUrl?: string;
   videoDurationSeconds?: number;
@@ -183,17 +188,25 @@ export interface EdgeNode {
   name: string;
   sector: string;
   status: 'ONLINE' | 'OFFLINE' | 'DEGRADED';
-  aiEngineStatus: 'ACTIVE' | 'IDLE' | 'ERROR';
-  hardwareModel: string;
-  accelerator: string;
-  inferenceLatencyMs: number;
-  powerConsumptionW: number;
+  aiEngineStatus?: 'ACTIVE' | 'IDLE' | 'ERROR';
+  hardwareModel?: string;
+  accelerator?: string;
+  inferenceLatencyMs?: number;
+  powerConsumptionW?: number;
   temperatureC: number;
   storageUsagePercent: number;
-  bandwidthUsageKbpkt: number;
-  connectedSensors: string[];
+  bandwidthUsageKbpkt?: number;
+  connectedSensors?: string[];
   firmwareVersion: string;
-  uptime: string;
+  uptime?: string;
+  ipAddress?: string;
+  macAddress?: string;
+  cpuUsagePercent?: number;
+  gpuUsagePercent?: number;
+  memoryUsagePercent?: number;
+  uptimeSeconds?: number;
+  assignedCameras?: string[];
+  aiModelsLoaded?: string[];
 }
 
 export interface PersonForensics {
@@ -259,6 +272,7 @@ export interface Evidence {
   targetId: string;
   cameraId: string;
   timestamp: string;
+  timeMs?: number;
   type: 'VIDEO_CLIP' | 'KEYFRAME' | 'METADATA_BUNDLE';
   confidence: number;
   location: string;
@@ -283,12 +297,18 @@ export interface Evidence {
 
 export interface EnvironmentStatus {
   temperatureC: number;
-  visibility: 'Good' | 'Moderate' | 'Poor';
-  weather: 'Clear' | 'Snow' | 'Fog' | 'Windy';
+  visibility?: 'Good' | 'Moderate' | 'Poor';
+  visibilityMeters?: number;
+  weather?: 'Clear' | 'Snow' | 'Fog' | 'Windy';
+  precipitation?: 'NONE' | 'LIGHT_SNOW' | 'HEAVY_SNOW' | 'RAIN' | 'HAIL' | string;
   windSpeedKmh: number;
-  aiDetectionCondition: 'NORMAL' | 'DEGRADED' | 'ADAPTED';
-  rgbCameraCondition: 'GOOD' | 'FAIR' | 'OBSTRUCTED';
-  lwirCameraCondition: 'NOT_CONNECTED' | 'GOOD' | 'CALIBRATING';
+  humidityPercent?: number;
+  ambientLux?: number;
+  uvIndex?: number;
+  atmosphericPressureHpa?: number;
+  aiDetectionCondition?: 'NORMAL' | 'DEGRADED' | 'ADAPTED';
+  rgbCameraCondition?: 'GOOD' | 'FAIR' | 'OBSTRUCTED';
+  lwirCameraCondition?: 'NOT_CONNECTED' | 'GOOD' | 'CALIBRATING';
   lastUpdated: string;
 }
 
@@ -299,7 +319,8 @@ export interface AuditEvent {
   details: string;
   actor: string;
   sha256Hash: string;
-  status: 'VERIFIED' | 'LOGGED' | 'FLAGGED';
+  status?: 'VERIFIED' | 'LOGGED' | 'FLAGGED';
+  verified?: boolean;
 }
 
 export type UserRole = 'ADMIN' | 'OPERATOR' | 'VIEWER' | 'SYSTEM_ADMIN' | 'TACTICAL_COMMANDER' | 'SECTOR_OPERATOR';

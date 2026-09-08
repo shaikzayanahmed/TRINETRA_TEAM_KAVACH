@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useDemo } from '../../context/DemoContext';
 import { useLiveVision } from '../../hooks/useLiveVision';
+import { globalMediaStreamService } from '../../services/globalMediaStreamService';
 import { DetectionOverlay } from './DetectionOverlay';
 import { VirtualFenceOverlay } from './VirtualFenceOverlay';
 
@@ -10,11 +11,12 @@ interface WebcamFeedProps {
 
 export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(
+    globalMediaStreamService.isWebcamActive() ? true : null
+  );
   const [errorState, setErrorState] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(!globalMediaStreamService.getWebcamStreamSync());
   const [useLiveAi, setUseLiveAi] = useState<boolean>(true);
 
   const { isDetectionVisible, activeTarget, isFenceBreached, isRunning: isDemoRunning } = useDemo();
@@ -40,20 +42,12 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
     }
 
     try {
-      // Request VIDEO only, NO microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user',
-        },
-        audio: false,
-      });
-
-      streamRef.current = stream;
+      // Retrieve or acquire persistent global MediaStream
+      const stream = await globalMediaStreamService.getOrCreateWebcamStream();
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
       }
 
       setHasPermission(true);
@@ -76,14 +70,29 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
   };
 
   useEffect(() => {
-    startWebcam();
+    // If stream is already live in memory, bind immediately
+    const existing = globalMediaStreamService.getWebcamStreamSync();
+    if (existing && videoRef.current) {
+      videoRef.current.srcObject = existing;
+      videoRef.current.play().catch(() => {});
+      setHasPermission(true);
+      setIsLoading(false);
+    } else {
+      startWebcam();
+    }
+
+    const unsubscribe = globalMediaStreamService.subscribeWebcam((stream) => {
+      if (stream && videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+        setHasPermission(true);
+        setIsLoading(false);
+      }
+    });
 
     return () => {
-      // Clean up MediaStream tracks on unmount to prevent leaks
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
+      unsubscribe();
+      // DO NOT terminate active stream tracks on unmount so live video & AI analysis persist across page navigation!
     };
   }, []);
 
@@ -123,7 +132,13 @@ export const WebcamFeed: React.FC<WebcamFeedProps> = ({ showDetection = true }) 
       </div>
 
       {/* Configured PostGIS Virtual Tripwire / Geofence Overlay */}
-      {showDetection && <VirtualFenceOverlay cameraId="CAM-RGB-01" isThermal={false} />}
+      {showDetection && (
+        <VirtualFenceOverlay
+          cameraId="CAM-RGB-01"
+          isThermal={false}
+          isDirectlyBreached={liveDetections.some((det) => det.isTripwireBreach)}
+        />
+      )}
 
       {/* Live AI Detections (Real Neural Network Running on Webcam) */}
       {hasPermission && hasLiveDetections && liveDetections.map((det) => (

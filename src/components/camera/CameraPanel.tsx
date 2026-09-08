@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Camera } from '../../types';
 import { WebcamFeed } from './WebcamFeed';
 import { ThermalFeedPlaceholder } from './ThermalFeedPlaceholder';
 import { VideoStreamFeed } from './VideoStreamFeed';
 import { useAuth } from '../../context/AuthContext';
+import { globalMediaStreamService } from '../../services/globalMediaStreamService';
 
 interface CameraPanelProps {
   camera: Camera;
   showDetection?: boolean;
-  opticalFilter?: 'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS';
+  opticalFilter?: 'STANDARD' | 'CONTRAST_ENHANCED' | 'HIGH_PASS' | 'THERMAL_CAMO';
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
 }
@@ -22,6 +23,7 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
 }) => {
   const { isOperator, isAdmin } = useAuth();
   const effectiveShowDetection = (isOperator || isAdmin) && showDetection;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Bulletproof fallback in case camera is undefined
   const safeCamera = camera || { type: 'RGB', status: 'OFFLINE', name: 'UNKNOWN', id: 'N/A', resolution: '1080P' };
@@ -30,12 +32,30 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
 
   const isOnline = isRGB ? safeCamera.status === 'ONLINE' : isStreamMode;
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    globalMediaStreamService.setActiveMedia({
+      videoSrc: url,
+      fileName: file.name,
+      isPlaying: true,
+      currentTime: 0,
+      isLooping: true,
+      spectralFilter: 'OPTICAL',
+      filterMode: 'MOVING_VEHICLES',
+    });
+    setIsStreamMode(true);
+  };
+
   const getFilterClass = () => {
     switch (opticalFilter) {
       case 'CONTRAST_ENHANCED':
         return 'contrast-[1.35] brightness-105 saturate-[1.25]';
       case 'HIGH_PASS':
         return 'contrast-[1.9] brightness-110 saturate-[0.2]';
+      case 'THERMAL_CAMO':
+        return 'contrast-[2.4] brightness-90 saturate-[2.8] invert-[75%] hue-rotate-[180deg]';
       case 'STANDARD':
       default:
         return '';
@@ -48,6 +68,15 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
         ? 'border-primary/80 shadow-[0_0_24px_rgba(173,198,255,0.25)] ring-1 ring-primary/40'
         : 'border-surface-container-high/60 shadow-[-3px_-3px_7px_rgba(255,255,255,0.03),4px_4px_10px_rgba(0,0,0,0.55)]'
     }`}>
+      {/* Hidden File Input for Direct Local Video File Selection */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="video/mp4,video/webm,video/ogg,video/quicktime,video/mkv,.mp4,.webm,.mov,.mkv"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
+
       {/* Panel Header */}
       <div className="h-9 px-3 sm:px-4 bg-surface-container-lowest border-b border-surface-container/70 flex items-center justify-between font-mono text-xs">
         <div className="flex items-center gap-2">
@@ -68,7 +97,7 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
         </div>
 
         <div className="flex items-center gap-2 text-[11px]">
-          {/* Secondary Camera Mode Switcher (Standby vs Video/VLC Stream) */}
+          {/* Secondary Camera Mode Switcher (Standby vs Video/VLC Stream vs Direct File Upload) */}
           {!isRGB && (
             <div className="flex items-center gap-1 bg-surface-container-high/80 rounded p-0.5 border border-surface-container-highest">
               <button
@@ -91,6 +120,17 @@ export const CameraPanel: React.FC<CameraPanelProps> = ({
               >
                 <span className="material-symbols-outlined text-[11px]">podcasts</span>
                 <span>VIDEO / VLC</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsStreamMode(true);
+                  fileInputRef.current?.click();
+                }}
+                title="Upload MP4, WebM, MOV, or MKV Video File"
+                className="px-2 py-0.5 rounded text-[10px] bg-tertiary/20 hover:bg-tertiary text-tertiary hover:text-on-tertiary font-bold transition-all flex items-center gap-1 border border-tertiary/40 shadow-sm cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[12px]">upload_file</span>
+                <span>UPLOAD</span>
               </button>
             </div>
           )}
